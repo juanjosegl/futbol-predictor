@@ -1,0 +1,91 @@
+# Configuración del pipeline de predicción de fútbol.
+# Todas las rutas son relativas a la raíz del proyecto.
+
+leagues:
+  # code: código de football-data.co.uk (nombre del CSV)
+  # soccerdata: nombre de liga en soccerdata (Understat / ClubElo)
+  # understat: nombre de liga en understat.com
+  # clubelo_country: código de país en ClubElo
+  # sofascore_tournament: id de "unique-tournament" en SofaScore (solo módulo opcional)
+  - {code: E0,  name: "Premier League", soccerdata: "ENG-Premier League", understat: "EPL",        clubelo_country: ENG, sofascore_tournament: 17}
+  - {code: SP1, name: "La Liga",        soccerdata: "ESP-La Liga",        understat: "La_liga",    clubelo_country: ESP, sofascore_tournament: 8}
+  - {code: I1,  name: "Serie A",        soccerdata: "ITA-Serie A",        understat: "Serie_A",    clubelo_country: ITA, sofascore_tournament: 23}
+  - {code: D1,  name: "Bundesliga",     soccerdata: "GER-Bundesliga",     understat: "Bundesliga", clubelo_country: GER, sofascore_tournament: 35}
+  - {code: F1,  name: "Ligue 1",        soccerdata: "FRA-Ligue 1",        understat: "Ligue_1",    clubelo_country: FRA, sofascore_tournament: 34}
+
+seasons:
+  n_seasons: 8          # número de temporadas a descargar (incluida la actual)
+  last_season: auto     # "auto" = temporada en curso según la fecha; o un código como "2526"
+
+sources:
+  understat: true
+  clubelo: true
+  sofascore: false      # módulo opcional; nada depende de él
+
+http:
+  timeout: 20
+  retries: 2
+  pause_seconds: 0.5    # pausa entre peticiones a football-data / understat / clubelo
+  user_agent: "futbol-predictor/1.0 (proyecto personal de investigación)"
+
+sofascore:
+  base_url: "https://api.sofascore.com/api/v1"
+  pause_seconds: 2.0
+  max_pages: 3
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  fixtures: data/fixtures
+  models: models
+  reports: reports
+  logs: logs
+
+team_names:
+  fuzzy_threshold: 85   # puntuación mínima (0-100) de rapidfuzz para aceptar un emparejamiento
+
+features:
+  windows: [5, 10]
+  use_opening_odds: false   # probabilidades implícitas de apertura como features
+  use_dc_probs: true        # probabilidades Dixon-Coles walk-forward como features del LightGBM
+  margin_method: multiplicative   # multiplicative | shin
+  elo:
+    k: 20
+    home_advantage: 60
+    initial: 1500
+    season_regression: 0.2    # al inicio de temporada: r = r*(1-c) + media*c
+    promoted_offset: -100     # equipos nuevos entran con media de la liga + offset
+
+dixon_coles:
+  xi: 0.0019            # decaimiento temporal por día (vida media ~1 año)
+  window_days: 1095     # ventana de entrenamiento (3 años)
+  alpha: 0.002          # regularización L2 de ataques/defensas
+  min_matches: 150      # mínimo de partidos de la liga para ajustar
+  max_goals: 10
+
+model:
+  min_train_seasons: 3  # temporadas mínimas antes de la primera temporada de test
+  calibration: isotonic # isotonic | sigmoid
+  lgbm_params:
+    n_estimators: 2000
+    learning_rate: 0.02
+    num_leaves: 15
+    min_child_samples: 80
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.7
+    reg_lambda: 5.0
+    random_state: 42
+    verbose: -1
+  early_stopping_rounds: 100
+
+backtest:
+  threshold: 0.05       # apostar si prob * cuota > 1 + umbral
+  flat_stake: 1.0
+  kelly_fraction: 0.25
+  kelly_max_fraction: 0.05   # tope de stake por apuesta (fracción del bankroll)
+  initial_bankroll: 100.0
+  one_bet_per_match: true
+  max_odds: null        # null = sin tope
+  models: [lgbm, dc]
+  markets: ["1x2", "ou25"]

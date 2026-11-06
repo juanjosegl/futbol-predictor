@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "futbol-predictor"
+version = "1.0.0"
+description = "Pipeline de predicción de resultados de fútbol orientado a apuestas"
+requires-python = ">=3.11"
+
+[project.scripts]
+futbol = "futbol.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

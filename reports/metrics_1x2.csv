@@ -1,0 +1,6 @@
+modelo,n,log_loss,brier,accuracy,dif_logloss_vs_cierre,ic95_inf,ic95_sup
+LightGBM (calibrado),7534,0.98866,0.58687,0.52827,0.02282,0.01723,0.02879
+LightGBM (sin calibrar),7534,0.98631,0.58726,0.52933,0.02047,0.0164,0.02449
+Dixon-Coles,7534,0.98733,0.58838,0.52721,0.02149,0.01775,0.02517
+Mercado apertura,7534,0.96796,0.57554,0.54048,0.00212,0.00058,0.00362
+Mercado cierre,7534,0.96584,0.57419,0.5446,0.0,0.0,0.0

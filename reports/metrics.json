@@ -1,0 +1,117 @@
+{
+  "n_1x2": 7534,
+  "n_ou25": 7534,
+  "seasons": [
+    "2223",
+    "2324",
+    "2425",
+    "2526",
+    "2627"
+  ],
+  "metrics_1x2": [
+    {
+      "modelo": "LightGBM (calibrado)",
+      "n": 7534,
+      "log_loss": 0.98866,
+      "brier": 0.58687,
+      "accuracy": 0.52827,
+      "dif_logloss_vs_cierre": 0.02282,
+      "ic95_inf": 0.01723,
+      "ic95_sup": 0.02879
+    },
+    {
+      "modelo": "LightGBM (sin calibrar)",
+      "n": 7534,
+      "log_loss": 0.98631,
+      "brier": 0.58726,
+      "accuracy": 0.52933,
+      "dif_logloss_vs_cierre": 0.02047,
+      "ic95_inf": 0.0164,
+      "ic95_sup": 0.02449
+    },
+    {
+      "modelo": "Dixon-Coles",
+      "n": 7534,
+      "log_loss": 0.98733,
+      "brier": 0.58838,
+      "accuracy": 0.52721,
+      "dif_logloss_vs_cierre": 0.02149,
+      "ic95_inf": 0.01775,
+      "ic95_sup": 0.02517
+    },
+    {
+      "modelo": "Mercado apertura",
+      "n": 7534,
+      "log_loss": 0.96796,
+      "brier": 0.57554,
+      "accuracy": 0.54048,
+      "dif_logloss_vs_cierre": 0.00212,
+      "ic95_inf": 0.00058,
+      "ic95_sup": 0.00362
+    },
+    {
+      "modelo": "Mercado cierre",
+      "n": 7534,
+      "log_loss": 0.96584,
+      "brier": 0.57419,
+      "accuracy": 0.5446,
+      "dif_logloss_vs_cierre": 0.0,
+      "ic95_inf": 0.0,
+      "ic95_sup": 0.0
+    }
+  ],
+  "metrics_ou25": [
+    {
+      "modelo": "LightGBM (calibrado)",
+      "n": 7534,
+      "log_loss": 0.68386,
+      "brier": 0.24279,
+      "accuracy": 0.56822,
+      "dif_logloss_vs_cierre": 0.01726,
+      "ic95_inf": 0.01176,
+      "ic95_sup": 0.0236
+    },
+    {
+      "modelo": "LightGBM (sin calibrar)",
+      "n": 7534,
+      "log_loss": 0.67829,
+      "brier": 0.24267,
+      "accuracy": 0.56703,
+      "dif_logloss_vs_cierre": 0.0117,
+      "ic95_inf": 0.00852,
+      "ic95_sup": 0.01482
+    },
+    {
+      "modelo": "Dixon-Coles",
+      "n": 7534,
+      "log_loss": 0.6791,
+      "brier": 0.24301,
+      "accuracy": 0.57486,
+      "dif_logloss_vs_cierre": 0.0125,
+      "ic95_inf": 0.00914,
+      "ic95_sup": 0.01591
+    },
+    {
+      "modelo": "Mercado apertura",
+      "n": 7534,
+      "log_loss": 0.66921,
+      "brier": 0.2383,
+      "accuracy": 0.59371,
+      "dif_logloss_vs_cierre": 0.00261,
+      "ic95_inf": 0.00132,
+      "ic95_sup": 0.00397
+    },
+    {
+      "modelo": "Mercado cierre",
+      "n": 7534,
+      "log_loss": 0.6666,
+      "brier": 0.23704,
+      "accuracy": 0.59371,
+      "dif_logloss_vs_cierre": 0.0,
+      "ic95_inf": 0.0,
+      "ic95_sup": 0.0
+    }
+  ],
+  "lgbm_beats_closing_market_1x2": false,
+  "nota": "dif_logloss_vs_cierre < 0 significa mejor que el mercado de cierre; IC 95% por bootstrap pareado."
+}
