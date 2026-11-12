@@ -30,17 +30,45 @@ def _raw_dir(cfg: dict) -> Path:
     return d
 
 
+def _blocked_hint(session) -> str:
+    """Detecta si el proveedor de internet redirige el sitio a una página de bloqueo (p. ej. Coljuegos)."""
+    try:
+        r = session.get("http://www.football-data.co.uk/", timeout=10, allow_redirects=False)
+        loc = r.headers.get("Location", "")
+        if r.is_redirect and "football-data.co.uk" not in loc:
+            return (f" El proveedor de internet redirige el sitio a {loc[:80]} (bloqueo a nivel de red). "
+                    "Descarga los CSV desde otra red y cópialos en data/raw/football_data/ "
+                    "(ver README, sección 'Si football-data está bloqueado').")
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
 def download(cfg: dict, refresh: bool = False, refresh_current: bool = False) -> list[Path]:
-    """Descarga los CSV de todas las ligas/temporadas configuradas (con caché)."""
+    """Descarga los CSV de todas las ligas/temporadas configuradas (con caché).
+
+    Si el sitio no responde, deja de intentarlo tras el primer fallo y usa lo que haya en caché.
+    """
     session = make_session(cfg)
     http = cfg["http"]
     current = current_season_code()
     paths: list[Path] = []
+    site_down = False
+    if refresh or refresh_current:  # comprobación rápida: si la red bloquea el sitio, no esperar a los timeouts
+        hint = _blocked_hint(session)
+        if hint:
+            site_down = True
+            log.warning("football-data.co.uk está bloqueado en esta red.%s Se usará la caché existente.", hint)
     for code in league_codes(cfg):
         for season in season_codes(cfg):
             dest = _raw_dir(cfg) / f"{code}_{season}.csv"
             force = refresh or (refresh_current and season == current)
             cached = dest.exists() and not force
+            if site_down and not cached:
+                if dest.exists():
+                    paths.append(dest)
+                    log.info("football-data %s %s (caché antigua: el sitio no responde)", code, season)
+                continue
             try:
                 cached_get(
                     SEASON_URL.format(season=season, code=code), dest, session=session,
@@ -50,9 +78,18 @@ def download(cfg: dict, refresh: bool = False, refresh_current: bool = False) ->
                 paths.append(dest)
                 log.info("football-data %s %s %s", code, season, "(caché)" if cached else "descargado")
             except SourceUnavailable as e:
-                log.warning("football-data: no disponible %s %s: %s", code, season, e)
+                if "404" in str(e):
+                    log.warning("football-data: no existe %s %s", code, season)
+                    continue
+                site_down = True
+                log.warning("football-data no responde (%s %s): %s.%s Se usará la caché existente.",
+                            code, season, str(e)[:160], _blocked_hint(session))
+                if dest.exists():
+                    paths.append(dest)
     if not paths:
-        raise RuntimeError("No se pudo descargar ningún CSV de football-data.co.uk (fuente obligatoria).")
+        raise RuntimeError("No se pudo descargar ningún CSV de football-data.co.uk (fuente obligatoria)."
+                           + _blocked_hint(session))
+    cfg["_football_data_down"] = site_down
     return paths
 
 
@@ -60,6 +97,11 @@ def download_fixtures(cfg: dict, refresh: bool = False) -> Path | None:
     """Descarga fixtures.csv (próximos partidos con cuotas) y lo convierte al formato simple."""
     session = make_session(cfg)
     dest = _raw_dir(cfg) / "fixtures.csv"
+    if cfg.get("_football_data_down"):
+        refresh = False  # el sitio no responde: no insistir, usar fixtures.csv en caché si existe
+        if not dest.exists():
+            log.warning("football-data fixtures no disponible (sitio caído y sin caché)")
+            return None
     try:
         content = cached_get(FIXTURES_URL, dest, session=session, refresh=refresh,
                              timeout=cfg["http"]["timeout"], retries=cfg["http"]["retries"])
@@ -68,11 +110,10 @@ def download_fixtures(cfg: dict, refresh: bool = False) -> Path | None:
         return None
     df = _read_csv_bytes(content)
     df = df[df["Div"].isin(league_codes(cfg))]
+    df = df[_parse_dates(df["Date"]) >= pd.Timestamp.today().normalize()]  # una caché vieja trae partidos ya jugados
     out_path = get_path(cfg, "fixtures") / "upcoming.csv"
     if df.empty:
-        log.info("fixtures.csv no contiene partidos de las ligas configuradas por ahora.")
-        if out_path.exists():
-            out_path.unlink()
+        log.info("fixtures.csv no contiene partidos próximos de las ligas configuradas por ahora.")
         return None
     simple = pd.DataFrame({
         "date": _parse_dates(df["Date"]).dt.strftime("%Y-%m-%d"),
@@ -82,6 +123,8 @@ def download_fixtures(cfg: dict, refresh: bool = False) -> Path | None:
         "odds_h": pd.to_numeric(df.get("AvgH"), errors="coerce").values,
         "odds_d": pd.to_numeric(df.get("AvgD"), errors="coerce").values,
         "odds_a": pd.to_numeric(df.get("AvgA"), errors="coerce").values,
+        "odds_over": _num(df, "Avg>2.5").values,
+        "odds_under": _num(df, "Avg<2.5").values,
     })
     simple.to_csv(out_path, index=False)
     log.info("Próximos partidos guardados en %s (%d)", out_path, len(simple))

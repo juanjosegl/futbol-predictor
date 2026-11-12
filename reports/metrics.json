@@ -12,12 +12,12 @@
     {
       "modelo": "LightGBM (calibrado)",
       "n": 7534,
-      "log_loss": 0.98866,
-      "brier": 0.58687,
-      "accuracy": 0.52827,
-      "dif_logloss_vs_cierre": 0.02282,
-      "ic95_inf": 0.01723,
-      "ic95_sup": 0.02879
+      "log_loss": 0.98521,
+      "brier": 0.58698,
+      "accuracy": 0.52641,
+      "dif_logloss_vs_cierre": 0.01937,
+      "ic95_inf": 0.01521,
+      "ic95_sup": 0.02364
     },
     {
       "modelo": "LightGBM (sin calibrar)",
@@ -38,6 +38,26 @@
       "dif_logloss_vs_cierre": 0.02149,
       "ic95_inf": 0.01775,
       "ic95_sup": 0.02517
+    },
+    {
+      "modelo": "Regresión logística (stats)",
+      "n": 7534,
+      "log_loss": 0.98745,
+      "brier": 0.58832,
+      "accuracy": 0.52429,
+      "dif_logloss_vs_cierre": 0.02161,
+      "ic95_inf": 0.01734,
+      "ic95_sup": 0.02611
+    },
+    {
+      "modelo": "Regresión logística + mercado",
+      "n": 7534,
+      "log_loss": 0.96829,
+      "brier": 0.57571,
+      "accuracy": 0.53916,
+      "dif_logloss_vs_cierre": 0.00245,
+      "ic95_inf": 0.00076,
+      "ic95_sup": 0.00415
     },
     {
       "modelo": "Mercado apertura",
@@ -64,12 +84,12 @@
     {
       "modelo": "LightGBM (calibrado)",
       "n": 7534,
-      "log_loss": 0.68386,
-      "brier": 0.24279,
-      "accuracy": 0.56822,
-      "dif_logloss_vs_cierre": 0.01726,
-      "ic95_inf": 0.01176,
-      "ic95_sup": 0.0236
+      "log_loss": 0.67748,
+      "brier": 0.24226,
+      "accuracy": 0.57433,
+      "dif_logloss_vs_cierre": 0.01088,
+      "ic95_inf": 0.00781,
+      "ic95_sup": 0.01402
     },
     {
       "modelo": "LightGBM (sin calibrar)",
@@ -90,6 +110,26 @@
       "dif_logloss_vs_cierre": 0.0125,
       "ic95_inf": 0.00914,
       "ic95_sup": 0.01591
+    },
+    {
+      "modelo": "Regresión logística (stats)",
+      "n": 7534,
+      "log_loss": 0.67922,
+      "brier": 0.24312,
+      "accuracy": 0.56637,
+      "dif_logloss_vs_cierre": 0.01262,
+      "ic95_inf": 0.00964,
+      "ic95_sup": 0.01574
+    },
+    {
+      "modelo": "Regresión logística + mercado",
+      "n": 7534,
+      "log_loss": 0.66919,
+      "brier": 0.23829,
+      "accuracy": 0.59172,
+      "dif_logloss_vs_cierre": 0.00259,
+      "ic95_inf": 0.00119,
+      "ic95_sup": 0.00405
     },
     {
       "modelo": "Mercado apertura",
@@ -113,5 +153,7 @@
     }
   ],
   "lgbm_beats_closing_market_1x2": false,
+  "mejor_modelo_1x2": "Regresión logística + mercado",
+  "mejor_modelo_supera_cierre": false,
   "nota": "dif_logloss_vs_cierre < 0 significa mejor que el mercado de cierre; IC 95% por bootstrap pareado."
 }

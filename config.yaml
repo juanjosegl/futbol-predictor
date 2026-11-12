@@ -6,18 +6,20 @@ leagues:
   # soccerdata: nombre de liga en soccerdata (Understat / ClubElo)
   # understat: nombre de liga en understat.com
   # clubelo_country: código de país en ClubElo
+  # fdorg: código de competición en football-data.org (respaldo, necesita token gratuito)
   # sofascore_tournament: id de "unique-tournament" en SofaScore (solo módulo opcional)
-  - {code: E0,  name: "Premier League", soccerdata: "ENG-Premier League", understat: "EPL",        clubelo_country: ENG, sofascore_tournament: 17}
-  - {code: SP1, name: "La Liga",        soccerdata: "ESP-La Liga",        understat: "La_liga",    clubelo_country: ESP, sofascore_tournament: 8}
-  - {code: I1,  name: "Serie A",        soccerdata: "ITA-Serie A",        understat: "Serie_A",    clubelo_country: ITA, sofascore_tournament: 23}
-  - {code: D1,  name: "Bundesliga",     soccerdata: "GER-Bundesliga",     understat: "Bundesliga", clubelo_country: GER, sofascore_tournament: 35}
-  - {code: F1,  name: "Ligue 1",        soccerdata: "FRA-Ligue 1",        understat: "Ligue_1",    clubelo_country: FRA, sofascore_tournament: 34}
+  - {code: E0,  name: "Premier League", soccerdata: "ENG-Premier League", understat: "EPL",        clubelo_country: ENG, sofascore_tournament: 17, fdorg: PL}
+  - {code: SP1, name: "La Liga",        soccerdata: "ESP-La Liga",        understat: "La_liga",    clubelo_country: ESP, sofascore_tournament: 8, fdorg: PD}
+  - {code: I1,  name: "Serie A",        soccerdata: "ITA-Serie A",        understat: "Serie_A",    clubelo_country: ITA, sofascore_tournament: 23, fdorg: SA}
+  - {code: D1,  name: "Bundesliga",     soccerdata: "GER-Bundesliga",     understat: "Bundesliga", clubelo_country: GER, sofascore_tournament: 35, fdorg: BL1}
+  - {code: F1,  name: "Ligue 1",        soccerdata: "FRA-Ligue 1",        understat: "Ligue_1",    clubelo_country: FRA, sofascore_tournament: 34, fdorg: FL1}
 
 seasons:
   n_seasons: 8          # número de temporadas a descargar (incluida la actual)
   last_season: auto     # "auto" = temporada en curso según la fecha; o un código como "2526"
 
 sources:
+  football_data_org: true   # respaldo si football-data.co.uk está bloqueado (token en FOOTBALL_DATA_ORG_TOKEN o .env)
   understat: true
   clubelo: true
   sofascore: false      # módulo opcional; nada depende de él
@@ -65,7 +67,7 @@ dixon_coles:
 
 model:
   min_train_seasons: 3  # temporadas mínimas antes de la primera temporada de test
-  calibration: isotonic # isotonic | sigmoid
+  calibration: sigmoid  # sigmoid (Platt) | isotonic. Isotónica creaba escalones de prob. 0 o 1 con una sola temporada
   lgbm_params:
     n_estimators: 2000
     learning_rate: 0.02
@@ -78,6 +80,20 @@ model:
     random_state: 42
     verbose: -1
   early_stopping_rounds: 100
+  reglog_C: 0.05        # regularización de la regresión logística (menor = más regularización)
+  main: rlm             # modelo principal en `predict`: rlm (más preciso, necesita cuotas) | lgbm | rl
+
+tracking:               # documento de seguimiento (reports/seguimiento.xlsx)
+  confianza_alta: 0.70  # pronóstico con probabilidad >= 70% -> confianza "Alta"
+  confianza_media: 0.55 # entre 55% y 70% -> "Media"; por debajo -> "Baja"
+
+seleccion:               # "Selección del día" de `futbol hoy`: los únicos pronósticos pensados para apostar
+  prob_min: 0.70         # probabilidad mínima del pronóstico
+  acierto_hist_min: 0.70 # ese nivel de confianza debe haber acertado al menos esto en esa liga (años no vistos)
+  n_hist_min: 100        # ...con al menos estos casos (evita ligas donde "alta" casi nunca ocurre)
+  max_por_dia: 5         # como mucho N partidos por día (los de mayor probabilidad)
+  permitir_empate: false # nunca apostar al empate
+  exigir_mercado_de_acuerdo: true  # si hay cuotas, el favorito del mercado debe ser el mismo
 
 backtest:
   threshold: 0.05       # apostar si prob * cuota > 1 + umbral
@@ -87,5 +103,41 @@ backtest:
   initial_bankroll: 100.0
   one_bet_per_match: true
   max_odds: null        # null = sin tope
-  models: [lgbm, dc]
+  models: [lgbm, dc, rl, rlm]   # rl = regresión logística (stats), rlm = reg. logística + mercado
   markets: ["1x2", "ou25"]
+
+# ---------------------------------------------------------------------------------------------
+# Pronósticos multideporte (`futbol hoy`). Datos: API pública de ESPN (resultados, calendario y
+# cuotas actuales). id = nombre corto propio; sport/league = ruta de ESPN; empate = el deporte
+# admite empate (1X2); chunk = periodo por petición (year | month; month si hay >1000 partidos/año);
+# excluir_tipos = tipos de temporada de ESPN que no se usan (1 = pretemporada).
+# ---------------------------------------------------------------------------------------------
+deportes:
+  desde: 2016            # primer año de historial
+  dias_adelante: 1       # `futbol hoy` muestra los partidos de hoy y de los N días siguientes (1 = hoy y mañana)
+  pausa_segundos: 0.25   # pausa entre peticiones
+  peso_mercado: 0.7      # cuánto pesa la probabilidad del mercado (cuotas) frente al modelo, 0..1
+  anios_test: 3          # años recientes que se usan para validar (walk-forward)
+  min_partidos: 600      # historial mínimo de una liga para dar pronósticos
+  ligas:
+    - {id: nba,  nombre: "NBA",  deporte: "Baloncesto", sport: basketball, league: nba, empate: false, excluir_tipos: [1], chunk: month}
+    - {id: nhl,  nombre: "NHL",  deporte: "Hockey",     sport: hockey,     league: nhl, empate: false, excluir_tipos: [1], chunk: month}
+    - {id: mlb,  nombre: "MLB",  deporte: "Béisbol",    sport: baseball,   league: mlb, empate: false, excluir_tipos: [1], chunk: month}
+    - {id: nfl,  nombre: "NFL",  deporte: "Fútbol americano", sport: football, league: nfl, empate: false, excluir_tipos: [1], chunk: year}
+    - {id: atp,  nombre: "ATP (individual masculino)", deporte: "Tenis", sport: tennis, league: atp, grouping: mens-singles,   empate: false, chunk: year}
+    - {id: wta,  nombre: "WTA (individual femenino)",  deporte: "Tenis", sport: tennis, league: wta, grouping: womens-singles, empate: false, chunk: year}
+    - {id: eng.1, nombre: "Premier League",   deporte: "Fútbol", sport: soccer, league: eng.1, empate: true, chunk: year}
+    - {id: esp.1, nombre: "La Liga",          deporte: "Fútbol", sport: soccer, league: esp.1, empate: true, chunk: year}
+    - {id: ita.1, nombre: "Serie A",          deporte: "Fútbol", sport: soccer, league: ita.1, empate: true, chunk: year}
+    - {id: ger.1, nombre: "Bundesliga",       deporte: "Fútbol", sport: soccer, league: ger.1, empate: true, chunk: year}
+    - {id: fra.1, nombre: "Ligue 1",          deporte: "Fútbol", sport: soccer, league: fra.1, empate: true, chunk: year}
+    - {id: ned.1, nombre: "Eredivisie",       deporte: "Fútbol", sport: soccer, league: ned.1, empate: true, chunk: year}
+    - {id: por.1, nombre: "Primeira Liga",    deporte: "Fútbol", sport: soccer, league: por.1, empate: true, chunk: year}
+    - {id: eng.2, nombre: "Championship",     deporte: "Fútbol", sport: soccer, league: eng.2, empate: true, chunk: year}
+    - {id: col.1, nombre: "Liga colombiana",  deporte: "Fútbol", sport: soccer, league: col.1, empate: true, chunk: year}
+    - {id: arg.1, nombre: "Liga argentina",   deporte: "Fútbol", sport: soccer, league: arg.1, empate: true, chunk: year}
+    - {id: bra.1, nombre: "Brasileirão",      deporte: "Fútbol", sport: soccer, league: bra.1, empate: true, chunk: year}
+    - {id: mex.1, nombre: "Liga MX",          deporte: "Fútbol", sport: soccer, league: mex.1, empate: true, chunk: year}
+    - {id: usa.1, nombre: "MLS",              deporte: "Fútbol", sport: soccer, league: usa.1, empate: true, chunk: year}
+    - {id: uefa.champions, nombre: "Champions League", deporte: "Fútbol", sport: soccer, league: uefa.champions, empate: true, chunk: year}
+    - {id: conmebol.libertadores, nombre: "Copa Libertadores", deporte: "Fútbol", sport: soccer, league: conmebol.libertadores, empate: true, chunk: year}
