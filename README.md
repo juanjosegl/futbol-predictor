@@ -121,11 +121,74 @@ src/futbol/
   models/                   dixon_coles.py, lgbm.py, reglog.py, training.py (walk-forward)
   deportes/                 espn.py (datos), modelo.py (Elo + forma + reg. logística), hoy.py (pronósticos del día)
   evaluation/               metrics.py, evaluate.py, backtest.py, exam.py, ledger.py, informe.py, predict.py, plots.py
+  mlops/                    config.py, data.py, train.py, register.py, predict.py, ejemplo_api.py (MLflow)
+MLproject, .env.example     entry points de `mlflow run` y variables de MLflow
+ejemplos-api/               petición y respuesta de la API del modelo registrado
+docs/capturas/              capturas de MLflow (runs y Model Registry)
 tests/                      mapeo de nombres, no-leakage, odds, backtest, descarga offline, ledger, informe, reg. logística
 data/raw/                   caché de descargas      data/processed/  dataset y predicciones
 models/                     modelo final            reports/         métricas, gráficos, backtest
 logs/                       un log por día
 ```
+
+## MLOps con MLflow
+
+Flujo completo de MLOps sobre el dataset de partidos (`data/processed/matches.parquet`): entrenar
+varios modelos 1X2 con seguimiento en MLflow, registrar el mejor en el **Model Registry** con el
+alias `challenger`, servirlo como API REST y empaquetarlo en una imagen **Docker**.
+
+| Paso | Comando | Qué deja |
+| --- | --- | --- |
+| Interfaz | `mlflow ui --host 127.0.0.1 --port 5050 --backend-store-uri sqlite:///mlflow.db` | http://127.0.0.1:5050 |
+| Entrenar | `mlflow run . --env-manager local` | runs `preprocesamiento`, 4 modelos y `referencia_mercado_cierre` |
+| Registrar | `mlflow run . -e register --env-manager local` | `models:/futbol-1x2@challenger` (menor log loss) |
+| Predecir | `mlflow run . -e predict --env-manager local` | probabilidades local/empate/visitante |
+| Servir | `mlflow models serve -m "models:/futbol-1x2@challenger" --port 5001 --env-manager local` | API en `:5001/invocations` |
+| Dockerfile | `mlflow models generate-dockerfile -m "models:/futbol-1x2@challenger" -d docker/build` | `docker/build/` (base `python:3.12-slim`) |
+| Imagen | `docker build -t futbol-1x2-challenger:latest docker/build` | imagen local |
+| Contenedor | `docker run -d --name futbol-1x2-api -p 5002:8080 futbol-1x2-challenger:latest` | API en `:5002/invocations` |
+
+Antes de cualquier comando: `source .venv/bin/activate`, `cp .env.example .env` (solo la primera
+vez) y `set -a && source .env && set +a`. Use el puerto 5050 para la interfaz: en macOS el 5000
+suele estar ocupado por AirPlay.
+
+**Decisiones del flujo** (`src/futbol/mlops/`):
+
+- **Objetivo:** `y_1x2` (0 local, 1 empate, 2 visitante) con las 71 features `f_*` previas al
+  partido. Se descartan las de más de 50 % de nulos (xG casi sin cobertura).
+- **Partición temporal:** train con las temporadas 2019-20 a 2024-25 (10 707 partidos) y test
+  con 2025-26 y 2026-27 (2 204). Nunca aleatoria.
+- **Modelos:** regresión logística, random forest, HistGradientBoosting y LightGBM. Cada uno es un
+  `Pipeline` de sklearn (imputación, escalado si aplica, clasificador), así que la API recibe las
+  features tal cual.
+- **Métricas:** `log_loss` (criterio de registro, menor es mejor), `brier` y `accuracy`. El run
+  `referencia_mercado_cierre` da la vara de medir de las cuotas de cierre. No tiene modelo y no
+  compite por el alias.
+- **Salida de la API:** `predict_proba`, es decir, tres probabilidades por partido.
+
+Resultados (test 2025-26 + 2026-27):
+
+| Run | log loss | Brier | accuracy |
+| --- | --- | --- | --- |
+| **random_forest** (challenger, v1) | **0.9867** | 0.5876 | 0.516 |
+| hist_gradient_boosting | 0.9890 | 0.5893 | 0.522 |
+| lightgbm | 0.9920 | 0.5909 | 0.530 |
+| regresion_logistica | 0.9929 | 0.5908 | 0.521 |
+| referencia_mercado_cierre | 0.9731 | 0.5788 | 0.540 |
+
+El mercado de cierre sigue siendo mejor que cualquier modelo, igual que en la evaluación principal.
+
+En un Mac con Apple Silicon conviene usar `generate-dockerfile` + `docker build` en vez de
+`mlflow models build-docker`: este último fuerza una imagen Ubuntu `amd64` que, emulada, falla
+en un paso de `apt`. La imagen nativa queda en unos 540 MB y responde a
+`curl http://127.0.0.1:5002/ping`.
+
+Petición de ejemplo y esquema completo: [`ejemplos-api/futbol-1x2__challenger.md`](ejemplos-api/futbol-1x2__challenger.md).
+Para subir la imagen a Docker Hub: `docker login`,
+`docker tag futbol-1x2-challenger:latest <usuario>/futbol-1x2-challenger:latest` y
+`docker push <usuario>/futbol-1x2-challenger:latest`.
+
+`mlflow.db` y `mlruns/` son generados y no se versionan.
 
 ## Multideporte (`futbol hoy`)
 
@@ -447,6 +510,7 @@ Añade una entrada a `leagues` en `config.yaml`:
 | `data_summary.json`, `sources_status.json` | Tamaño del dataset, cobertura y estado de las fuentes |
 | `unmatched_teams.csv`, `fuzzy_matches.csv` | Reporte del mapeo de nombres |
 | `predictions.csv` | Salida de `predict` |
+| `hoy.html`, `seguimiento.html` | Versión web de los dos documentos (misma información que los `.xlsx`, se abre con `futbol ver`) |
 | `hoy.xlsx`, `hoy.csv` | Selección del día (primera hoja) y todos los pronósticos de `futbol hoy`, de más a menos probable |
 | `deportes_metricas.csv`, `deportes_calibracion.csv` | Validación del modelo multideporte por liga y por nivel de confianza |
 | `ledger.csv`, `ledger_resumen.json` | Registro de predicciones y su liquidación (`settle`) |

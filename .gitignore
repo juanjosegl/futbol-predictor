@@ -10,3 +10,8 @@ reports/backtest_bets.csv
 .DS_Store
 .env
 ~$*.xlsx
+
+# MLflow (generados)
+mlflow.db
+mlruns/
+docker/build/
