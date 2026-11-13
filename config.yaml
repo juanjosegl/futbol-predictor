@@ -95,6 +95,15 @@ seleccion:               # "Selección del día" de `futbol hoy`: los únicos pr
   permitir_empate: false # nunca apostar al empate
   exigir_mercado_de_acuerdo: true  # si hay cuotas, el favorito del mercado debe ser el mismo
 
+mercados:                # tipos de apuesta que `futbol hoy` compara en fútbol para elegir la "apuesta recomendada"
+  # El ganador siempre se considera. Otro tipo de apuesta lo sustituye solo si es más probable que él.
+  # 1X / X2 = doble oportunidad (local o empate / visitante o empate) · O1.5 = más de 1.5 goles (2 o más)
+  # U2.5 = menos de 2.5 goles (2 o menos) · BTTS / NOBTTS = ambos equipos marcan: sí / no
+  activos: ["1X", "X2", "O1.5", "O2.5", "U2.5", "U3.5", "BTTS", "NOBTTS"]
+  prob_max: 0.80           # no recomendar apuestas casi seguras que no pagan (cuota justa < 1 / 0.80 = 1.25)
+  margen_calibracion: 0.05 # descartar un tipo de apuesta si en la validación acertó 5 puntos menos de lo que decía
+  n_hist_min: 100          # ...con al menos estos casos en esa liga
+
 backtest:
   threshold: 0.05       # apostar si prob * cuota > 1 + umbral
   flat_stake: 1.0

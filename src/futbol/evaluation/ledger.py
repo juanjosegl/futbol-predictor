@@ -18,16 +18,17 @@ import numpy as np
 import pandas as pd
 
 from ..config import get_path
+from ..deportes import mercados
 
 log = logging.getLogger(__name__)
 
 USER_COLS = ["apuesta_real", "cuota_real", "stake_real", "apuesta_tipo"]  # apuesta_tipo: real | papel
-RESULT_COLS = ["fthg", "ftag", "resultado", "over25", "acierto", "acierto_mercado", "acierto_ou", "ll_modelo",
-               "ll_mercado", "profit_pick", "profit_value_bet", "profit_value_bet_ou", "profit_real",
-               "fuente_resultado"]
+RESULT_COLS = ["fthg", "ftag", "resultado", "over25", "acierto", "acierto_mercado", "acierto_ou", "acierto_rec",
+               "ll_modelo", "ll_mercado", "profit_pick", "profit_rec", "profit_value_bet", "profit_value_bet_ou",
+               "profit_real", "fuente_resultado"]
 TEXT_COLS = ["value_bet", "value_bet_ou", "apuesta_real", "resultado", "fuente_resultado", "pick", "pick_ou",
              "confianza", "event_id", "deporte", "liga_nombre", "pick_nombre", "hora", "inicio_utc", "torneo", "ronda",
-             "casa_cuotas", "league", "modelo", "seleccion", "nota", "apuesta_tipo"]
+             "casa_cuotas", "league", "modelo", "seleccion", "nota", "apuesta_tipo", "rec", "rec_tipo", "rec_nombre"]
 SEL = np.array(["1", "X", "2"])
 SEL_OU = np.array(["Over", "Under"])
 
@@ -75,7 +76,8 @@ def append_to_ledger(cfg: dict, preds: pd.DataFrame, now: dt.datetime | None = N
         replace = old["pred_id"].isin(new["pred_id"]) & ~settled
         keep_user = old.loc[replace].set_index("pred_id")[[c for c in USER_COLS if c in old]]
         if "seleccion" in old and "seleccion" in new:  # si estuvo en la selección del día, lo sigue estando
-            was = set(old.loc[replace & (old["seleccion"].astype(str).str.lower() == "true"), "pred_id"])
+            known = (old["home"] != "TBD") & (old["away"] != "TBD")  # cuadro de tenis sin decidir: no contaba
+            was = set(old.loc[replace & known & (old["seleccion"].astype(str).str.lower() == "true"), "pred_id"])
             new["seleccion"] = new["seleccion"].astype(bool) | new["pred_id"].isin(was)
         new = new[~new["pred_id"].isin(old.loc[settled, "pred_id"])]  # no tocar partidos ya liquidados
         new = new.set_index("pred_id")
@@ -110,6 +112,8 @@ def score(led: pd.DataFrame) -> pd.DataFrame:
 
     - `acierto`: el pronóstico (resultado más probable según el modelo) coincide con el resultado.
     - `profit_pick`: beneficio de apostar 1 unidad al pronóstico a la cuota registrada.
+    - `acierto_rec` / `profit_rec`: lo mismo para la apuesta recomendada (`rec`: ganador, total de goles,
+      ambos marcan...; en las filas antiguas, sin `rec`, es el pronóstico al ganador).
     - `profit_value_bet(_ou)`: beneficio de 1 unidad en la apuesta de valor (si la hubo).
     - `profit_real`: beneficio de la apuesta que el usuario dice haber hecho (`apuesta_real`, `cuota_real`, `stake_real`).
     """
@@ -146,12 +150,35 @@ def score(led: pd.DataFrame) -> pd.DataFrame:
     put("ll_modelo", -np.log(np.clip(np.nan_to_num(P[i, y], nan=1.0), 1e-15, None)), okP)
     put("ll_mercado", -np.log(np.clip(np.nan_to_num(mk[i, y], nan=1.0), 1e-15, None)), okM)
     put("profit_pick", _settle_bets(pd.Series(SEL[pick]), list(SEL), won, odds), okP)
+    rec, cuota_rec = rec_bets(led)
+    names = mercados.CODES + list(SEL_OU)  # todos los tipos de apuesta + los códigos antiguos Over/Under (2.5)
+    won_all = np.column_stack([mercados.won(c, np.nan_to_num(hg), np.nan_to_num(ag)) for c in names])
+    k = np.array([names.index(c) if c in names else -1 for c in rec])
+    put("acierto_rec", won_all[i, np.maximum(k, 0)].astype(float), k >= 0)
+    put("profit_rec", _settle_bets(pd.Series(rec), names, won_all, cuota_rec), k >= 0)
     put("profit_value_bet", _settle_bets(led["value_bet"], list(SEL), won, odds), True)
     put("profit_value_bet_ou", _settle_bets(led["value_bet_ou"], list(SEL_OU), won_ou, odds_ou), True)
     stake = pd.to_numeric(led["stake_real"], errors="coerce").fillna(1.0).to_numpy(float)
-    put("profit_real", _settle_bets(led["apuesta_real"], list(SEL) + list(SEL_OU), np.column_stack([won, won_ou]),
+    put("profit_real", _settle_bets(led["apuesta_real"], names, won_all,
                                     pd.to_numeric(led["cuota_real"], errors="coerce").to_numpy(float), stake), True)
     return led
+
+
+def rec_bets(led: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """(código, cuota registrada) de la apuesta recomendada de cada fila. Las predicciones anteriores a los
+    tipos de apuesta no tienen `rec`: su apuesta recomendada era el pronóstico al ganador."""
+    n = len(led)
+
+    def num(c):
+        return pd.to_numeric(led[c], errors="coerce").to_numpy(float) if c in led else np.full(n, np.nan)
+
+    P = np.column_stack([num("p_home"), num("p_draw"), num("p_away")])
+    okP = np.isfinite(P).all(axis=1)
+    pick = np.nan_to_num(P, nan=-1).argmax(axis=1)
+    old = led["rec"].isna().to_numpy() if "rec" in led else np.ones(n, bool)
+    rec = np.where(old, np.where(okP, SEL[pick], ""), led["rec"].fillna("").to_numpy() if "rec" in led else "")
+    odds = np.column_stack([num("odds_home"), num("odds_draw"), num("odds_away")])
+    return rec.astype(object), np.where(old, odds[np.arange(n), pick], num("cuota_rec"))
 
 
 def _norm(s) -> str:
@@ -164,8 +191,9 @@ def record_bet(cfg: dict, equipo: str, cuota: float, monto: float | None = None,
                fecha: str | None = None, papel: bool = False) -> dict:
     """Anota una apuesta (real o de papel) sobre un partido pendiente del ledger, buscándolo por nombre.
 
-    Por defecto se apuesta al pronóstico del sistema; `a` permite otra selección (1, X, 2, Over, Under o el
-    nombre de uno de los dos contrincantes). Siempre es una apuesta simple a un solo partido.
+    Por defecto se apuesta a la apuesta recomendada del sistema; `a` permite otra: 1, X, 2, el nombre de uno de
+    los dos contrincantes, o un tipo de apuesta (1X, X2, 12, O1.5, O2.5, U2.5, U3.5, BTTS, NOBTTS...).
+    Siempre es una apuesta simple a un solo partido.
     """
     from .informe import write_report
 
@@ -190,19 +218,22 @@ def record_bet(cfg: dict, equipo: str, cuota: float, monto: float | None = None,
     i = cand.index[0]
     r = led.loc[i]
     p = np.array([r["p_home"], r["p_draw"], r["p_away"]], float)
-    sel = SEL[int(np.nan_to_num(p, nan=-1).argmax())]
+    sel = r["rec"] if "rec" in led and isinstance(r["rec"], str) and r["rec"] else SEL[int(np.nan_to_num(p, nan=-1).argmax())]
     if a:
-        codes = {"1": "1", "x": "X", "2": "2", "over": "Over", "under": "Under", "empate": "X"}
         an = _norm(a)
-        sel = codes.get(an) or ("1" if an in _norm(r["home"]) else "2" if an in _norm(r["away"]) else None)
+        sel = mercados.parse_code(an) or ("1" if an in _norm(r["home"]) else "2" if an in _norm(r["away"]) else None)
         if sel is None:
-            raise ValueError(f"No entiendo --a '{a}'. Usa 1, X, 2, Over, Under o el nombre de {r['home']} / {r['away']}.")
+            raise ValueError(f"No entiendo --a '{a}'. Usa el nombre de {r['home']} / {r['away']}, o un tipo de apuesta: "
+                             "1, X, 2, 1X, X2, 12, O1.5, O2.5, O3.5, U2.5, U3.5, BTTS (ambos marcan), NOBTTS.")
     led.loc[i, ["apuesta_real", "apuesta_tipo"]] = [sel, "papel" if papel else "real"]
     led.loc[i, ["cuota_real", "stake_real"]] = [float(cuota), 1.0 if papel else float(monto)]
     led.to_csv(_path(cfg), index=False)
     write_report(cfg, led)
-    name = {"1": r["home"], "X": "Empate", "2": r["away"]}.get(sel, sel)
+    name = bet_name(sel, r["home"], r["away"])
+    code = mercados.ALIASES.get(sel, sel)
     prob = {"1": p[0], "X": p[1], "2": p[2]}.get(sel, np.nan)
+    if not np.isfinite(prob) and mercados.col(code) in led:
+        prob = pd.to_numeric(r[mercados.col(code)], errors="coerce")
     info = {"partido": f"{r['home']} vs {r['away']}", "fecha": r["date"], "apuesta_a": name, "cuota": float(cuota),
             "monto": None if papel else float(monto), "tipo": "papel" if papel else "real",
             "probabilidad_modelo": float(prob) if np.isfinite(prob) else None,
@@ -221,6 +252,11 @@ def record_bet(cfg: dict, equipo: str, cuota: float, monto: float | None = None,
         msg += " Ojo: el partido ya había empezado."
     log.info(msg)
     return info
+
+
+def bet_name(code, home: str, away: str) -> str:
+    """Nombre legible de una apuesta: el contrincante si es al ganador; si no, el tipo de apuesta."""
+    return {"1": home, "X": "Empate", "2": away}.get(code) or mercados.nombre(code, home, away)
 
 
 def _is_valid(led: pd.DataFrame) -> pd.Series:
@@ -303,6 +339,11 @@ def settle(cfg: dict, events: pd.DataFrame | None = None) -> dict:
             "log_loss_modelo_mismas": float(both["ll_modelo"].mean()) if len(both) else None,
             "pronosticos_1u": {"n": len(pk), "beneficio_u": float(pk.sum()),
                                "yield": float(pk.mean()) if len(pk) else None},
+            "apuesta_recomendada": {"n": int(honest["acierto_rec"].notna().sum()),
+                                    "aciertos": int(honest["acierto_rec"].sum()),
+                                    "accuracy": float(honest["acierto_rec"].mean()),
+                                    "beneficio_u": float(honest["profit_rec"].sum()),
+                                    "apuestas_con_cuota": int(honest["profit_rec"].notna().sum())},
             "value_bets_1x2": {"n": len(vb), "beneficio_u": float(vb.sum()),
                                "yield": float(vb.mean()) if len(vb) else None},
             "value_bets_ou": {"n": len(vbo), "beneficio_u": float(vbo.sum()),

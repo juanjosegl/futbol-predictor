@@ -78,7 +78,7 @@ Todos aceptan `--config ruta/a/config.yaml`. También se pueden lanzar con `pyth
 | `futbol actualizar` | **Rutina semanal en un solo comando:** descarga → build → train → settle → predict de `data/fixtures/upcoming.csv` (o `--fixtures ARCHIVO.csv`) → documento de seguimiento. `--no-train` para ir más rápido. |
 | `futbol hoy` | **Pronósticos multideporte del día en un solo comando** (ver [Multideporte](#multideporte-futbol-hoy)): actualiza datos, liquida lo pendiente, predice y actualiza el ledger y el Excel. `--dias 3`, `--top 40`, `--liga nba --liga atp`, `--no-ledger`. |
 | `futbol ver` | Abre en el navegador `reports/hoy.html` (selección del día) y `reports/seguimiento.html` (aciertos, fallos y apuestas); no necesita Excel. `--excel` abre los `.xlsx`. |
-| `futbol apuesta EQUIPO --cuota 1.35 --monto 10000` | Anota una apuesta simple sobre un partido pendiente (por defecto, al pronóstico). `--papel` = simulada, sin dinero. Se liquida sola. |
+| `futbol apuesta EQUIPO --cuota 1.35 --monto 10000` | Anota una apuesta simple sobre un partido pendiente (por defecto, la apuesta recomendada; `--a O1.5`, `--a BTTS`... para otro tipo). `--papel` = simulada, sin dinero. Se liquida sola. |
 | `futbol programar` | Ejecuta `futbol hoy` solo cada día (macOS, 07:00 y 17:00; `--hora`, `--estado`, `--probar`, `--quitar`). |
 | `futbol deportes-descargar` | Descarga/actualiza el historial de las ligas de `deportes.ligas` (ESPN). `--refresh` para rehacerlo. |
 | `futbol deportes-evaluar` | Valida el modelo multideporte en años no vistos (`reports/deportes_metricas.csv`, `deportes_calibracion.csv`). |
@@ -204,13 +204,20 @@ ATP/WTA**:
 2. Liquida las predicciones anteriores del ledger con los resultados reales.
 3. Predice todos los partidos de hoy y de los próximos `deportes.dias_adelante` días y los ordena de más a
    menos probable (`reports/hoy.csv`), con su nivel de confianza y el % de acierto histórico de ese nivel.
-4. Marca la **selección del día** (`reports/hoy.xlsx`, primera hoja): los pocos partidos pensados para
-   apostar, siempre apuesta simple al ganador. Entra un partido solo si la probabilidad es ≥ 70%, ese nivel
-   de confianza acertó ≥ 70% en esa liga en años no vistos (con ≥ 100 casos), no es empate y, si hay cuotas,
-   el mercado tiene al mismo favorito; como mucho 5 por día (`seleccion.*` en `config.yaml`).
-5. Registra cada predicción (válida solo si se hizo antes de que empezara el partido) y actualiza
-   `reports/seguimiento.xlsx`, con las hojas **Mis apuestas**, **Selección**, **Modelo vs mercado** (modelo
-   local solo, mercado y combinación sobre los mismos partidos) y **Por deporte**.
+4. Elige la **apuesta recomendada** de cada partido. En fútbol compara varios tipos de apuesta simple
+   (ganador, doble oportunidad, más/menos goles, ambos marcan; `deportes/mercados.py`, `mercados.*` en
+   `config.yaml`): parte del ganador más probable y lo cambia por otro tipo solo si es más probable, su
+   probabilidad no pasa de `prob_max` (80%) y ese tipo acertó lo que prometía en la validación
+   (`reports/deportes_mercados.csv`). Los goles salen de un modelo de ataque/defensa por equipo (Poisson con
+   corrección de Dixon-Coles), ajustado al pronóstico 1X2 y a la línea de goles de ESPN. En los demás
+   deportes la apuesta recomendada es el ganador.
+5. Marca la **selección del día** (`reports/hoy.xlsx`, primera hoja): las pocas apuestas pensadas para
+   apostar, siempre apuesta simple. Entra la apuesta recomendada solo si su probabilidad es ≥ 70%, ese tipo
+   de apuesta con esa probabilidad acertó ≥ 70% en años no vistos (con ≥ 100 casos), no es empate y, si es
+   al ganador y hay cuotas, el mercado tiene al mismo favorito; como mucho 5 por día (`seleccion.*`).
+6. Registra cada predicción (válida solo si se hizo antes de que empezara el partido) y actualiza
+   `reports/seguimiento.xlsx`, con las hojas **Mis apuestas**, **Selección**, **Por tipo de apuesta**,
+   **Modelo vs mercado** (modelo local solo, mercado y combinación sobre los mismos partidos) y **Por deporte**.
 
 **Datos:** API pública de ESPN (`site.api.espn.com`, JSON, sin clave), con un cliente HTTP normal e
 identificado, caché en disco y pausa entre peticiones. Da marcadores históricos, calendario y, para los

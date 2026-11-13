@@ -4,8 +4,10 @@ Se genera a partir del ledger (`reports/seguimiento.xlsx`, tras `predict` y `set
 examen sobre partidos pasados (`reports/examen_<desde>_<hasta>.xlsx`). Hojas:
 
 - Resumen:        totales, % de acierto (con IC 95%), comparación con el mercado y beneficio.
-- Predicciones:   una fila por partido: pronóstico, probabilidad, confianza, cuota, marcador y estado.
+- Predicciones:   una fila por partido: apuesta recomendada, pronóstico al ganador, probabilidad, marcador y estado.
 - Selección:      rendimiento de la "selección del día" (lo único pensado para apostar) frente al resto.
+- Por tipo de apuesta: aciertos de la apuesta recomendada según su tipo (ganador, total de goles, ambos marcan...).
+- Tipos de apuesta (fútbol): cada tipo de apuesta en todos los partidos de fútbol, se recomendara o no.
 - Modelo vs mercado: ¿funciona el modelo local? Modelo solo, mercado y combinación sobre los mismos partidos.
 - Por confianza:  ¿acierta más cuando dice estar más seguro? ¿y da beneficio?
 - Por deporte, Por liga, Por pronóstico (1/X/2), Por semana, Over-Under 2.5.
@@ -23,7 +25,8 @@ import numpy as np
 import pandas as pd
 
 from ..config import get_path
-from .ledger import SEL, _is_valid, load_ledger, score
+from ..deportes import mercados
+from .ledger import SEL, _is_valid, bet_name, load_ledger, rec_bets, score
 
 log = logging.getLogger(__name__)
 
@@ -70,13 +73,22 @@ def tracking_frame(led: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     over = q > 0.5
     done = led["resultado"].notna().to_numpy()
     hit = num("acierto")
+    hit_rec = num("acierto_rec")
+    rec, cuota_rec = rec_bets(led)
+    old = led["rec"].isna().to_numpy() if "rec" in led else np.ones(n, bool)  # filas sin apuesta recomendada propia
+    home, away = led["home"].to_numpy(), led["away"].to_numpy()
     hg, ag = num("fthg"), num("ftag")
     marcador = [f"{int(a)}-{int(b)}" if d else "" for a, b, d in zip(np.nan_to_num(hg), np.nan_to_num(ag), done)]
     t = pd.DataFrame({
         "fecha": pd.to_datetime(led["date"]).dt.strftime("%Y-%m-%d").to_numpy(),
         "deporte": (led["deporte"].fillna("Fútbol") if "deporte" in led else pd.Series("Fútbol", index=led.index)).to_numpy(),
         "liga": (led["liga_nombre"].fillna(led["league"]) if "liga_nombre" in led else led["league"]).to_numpy(),
-        "local": led["home"].to_numpy(), "visitante": led["away"].to_numpy(),
+        "local": home, "visitante": away,
+        "apuesta_recomendada": [mercados.nombre(c, h, a) if c else "" for c, h, a in zip(rec, home, away)],
+        "tipo_apuesta": [mercados.tipo(c) for c in rec],
+        "prob_recomendada": np.where(old, np.where(ok, P[i, pick], np.nan), num("p_rec")),
+        "cuota_recomendada": cuota_rec,
+        "estado_recomendada": np.where(~done, "Pendiente", np.where(hit_rec == 1, "Acertó", "Falló")),
         "pronostico": np.where(ok, SEL[pick], ""),
         "pronostico_nombre": np.where(~ok, "", np.column_stack([led["home"].to_numpy(), np.full(n, "Empate"),
                                                                  led["away"].to_numpy()])[i, pick]),
@@ -92,7 +104,8 @@ def tracking_frame(led: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         "apuesta_valor_ou": led["value_bet_ou"].fillna("").to_numpy() if "value_bet_ou" in led else "",
         "marcador": marcador, "resultado": led["resultado"].fillna("").to_numpy(),
         "estado": np.where(~done, "Pendiente", np.where(hit == 1, "Acertó", "Falló")),
-        "acierto": hit, "acierto_mercado": num("acierto_mercado"), "acierto_ou": num("acierto_ou"),
+        "acierto": hit, "acierto_rec": hit_rec, "acierto_mercado": num("acierto_mercado"),
+        "acierto_ou": num("acierto_ou"), "beneficio_recomendada": num("profit_rec"),
         "beneficio_pronostico": num("profit_pick"), "beneficio_valor": num("profit_value_bet"),
         "beneficio_valor_ou": num("profit_value_bet_ou"),
         "apuesta_real": led["apuesta_real"].fillna("").to_numpy(),
@@ -106,24 +119,53 @@ def tracking_frame(led: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return t.sort_values(["fecha", "liga", "local"], kind="mergesort").reset_index(drop=True)
 
 
-def _group(d: pd.DataFrame, by, order: list | None = None) -> pd.DataFrame:
-    """Tabla de aciertos y beneficio por grupo (apostando 1 unidad al pronóstico de cada partido)."""
+def _group(d: pd.DataFrame, by, order: list | None = None, rec: bool = False) -> pd.DataFrame:
+    """Tabla de aciertos y beneficio por grupo, apostando 1 unidad por partido al pronóstico al ganador
+    (`rec=False`) o a la apuesta recomendada (`rec=True`)."""
+    hit, prob, odds, profit = (("acierto_rec", "prob_recomendada", "cuota_recomendada", "beneficio_recomendada") if rec
+                               else ("acierto", "prob", "cuota", "beneficio_pronostico"))
     rows = []
     for key, g in d.groupby(by, sort=True, observed=True):
-        n, k = len(g), float(g["acierto"].sum())
+        n, k = len(g), float(g[hit].sum())
         lo, hi = wilson(k, n)
-        b = g["beneficio_pronostico"].dropna()
+        b = g[profit].dropna()
         rows.append({by if isinstance(by, str) else "grupo": key, "partidos": n, "aciertos": int(k),
-                     "pct_acierto": k / n, "ic95_inf": lo, "ic95_sup": hi, "prob_media_modelo": g["prob"].mean(),
-                     "pct_acierto_mercado": g["acierto_mercado"].mean(), "cuota_media": g["cuota"].mean(),
+                     "pct_acierto": k / n, "ic95_inf": lo, "ic95_sup": hi, "prob_media_modelo": g[prob].mean(),
+                     "pct_acierto_mercado": g["acierto_mercado"].mean(), "cuota_media": g[odds].mean(),
                      "apuestas_con_cuota": len(b), "beneficio_u": b.sum() if len(b) else np.nan,
                      "yield": b.mean() if len(b) else np.nan})
     out = pd.DataFrame(rows, columns=[by, "partidos", "aciertos", "pct_acierto", "ic95_inf", "ic95_sup",
                                       "prob_media_modelo", "pct_acierto_mercado", "cuota_media",
                                       "apuestas_con_cuota", "beneficio_u", "yield"])
+    if rec:
+        out = out.drop(columns="pct_acierto_mercado")  # el favorito del mercado solo es comparable con el ganador
     if order and len(out):
         out = out.set_index(by).reindex([o for o in order if o in set(out[by])]).reset_index()
     return out
+
+
+def markets_table(scored: pd.DataFrame) -> pd.DataFrame:
+    """Cada tipo de apuesta en todos los partidos de fútbol ya jugados (se recomendara o no): cuántas veces
+    el sistema le dio ≥ 50%, cuántas de esas se cumplieron y qué probabilidad media les daba."""
+    cols = ["tipo_apuesta", "apuesta", "partidos", "aciertos", "pct_acierto", "prob_media_modelo", "ic95_inf", "ic95_sup"]
+    ok = scored["resultado"].notna() & (_is_valid(scored) if "antes_del_partido" in scored else True)
+    s = scored[ok]
+    hg = pd.to_numeric(s["fthg"], errors="coerce").to_numpy(float)
+    ag = pd.to_numeric(s["ftag"], errors="coerce").to_numpy(float)
+    rows = []
+    for code in mercados.CODES:
+        if mercados.col(code) not in s:
+            continue
+        p = pd.to_numeric(s[mercados.col(code)], errors="coerce").to_numpy(float)
+        m = np.isfinite(p) & (p >= 0.5) & pd.to_numeric(s[mercados.col("O2.5")], errors="coerce").notna().to_numpy()
+        if not m.any():
+            continue
+        k = float(mercados.won(code, hg[m], ag[m]).sum())
+        lo, hi = wilson(k, int(m.sum()))
+        rows.append({"tipo_apuesta": mercados.tipo(code), "apuesta": mercados.nombre(code), "partidos": int(m.sum()),
+                     "aciertos": int(k), "pct_acierto": k / m.sum(), "prob_media_modelo": float(p[m].mean()),
+                     "ic95_inf": lo, "ic95_sup": hi})
+    return pd.DataFrame(rows, columns=cols)
 
 
 def analyze(led: pd.DataFrame, cfg: dict) -> dict[str, pd.DataFrame]:
@@ -138,8 +180,8 @@ def analyze(led: pd.DataFrame, cfg: dict) -> dict[str, pd.DataFrame]:
                                                   "beneficio_real"))
     # Apuestas anotadas con `futbol apuesta`: cuentan todas las liquidadas, reales y de papel por separado
     bets = t[t["apuesta_real"] != ""].copy()
-    bets["apostado_a"] = [bets.loc[i, "local"] if a == "1" else bets.loc[i, "visitante"] if a == "2" else
-                          {"X": "Empate"}.get(a, a) for i, a in zip(bets.index, bets["apuesta_real"])]
+    bets["apostado_a"] = [bet_name(a, bets.loc[i, "local"], bets.loc[i, "visitante"])
+                          for i, a in zip(bets.index, bets["apuesta_real"])]
     bets["estado_apuesta"] = np.where(bets["beneficio_real"].isna(), "Pendiente",
                                       np.where(bets["beneficio_real"] > 0, "Ganada", "Perdida"))
     done_b = bets[bets["beneficio_real"].notna()]
@@ -155,7 +197,10 @@ def analyze(led: pd.DataFrame, cfg: dict) -> dict[str, pd.DataFrame]:
                 f"con {st.sum():.2f} apostado (yield {100 * b['beneficio_real'].sum() / st.sum():.1f}{err}%)")
     alta = d[d["confianza"] == "Alta"]
     sel = d[d["seleccion"] == "Sí"]
-    sel_lo, sel_hi = wilson(float(sel["acierto"].sum()), len(sel))
+    sel_lo, sel_hi = wilson(float(sel["acierto_rec"].sum()), len(sel))
+    kr = float(d["acierto_rec"].sum())
+    rec_lo, rec_hi = wilson(kr, n)
+    otros = d[d["tipo_apuesta"] != "Ganador"]
 
     def pct(x):
         return f"{100 * x:.1f}%" if np.isfinite(x) else "—"
@@ -182,9 +227,15 @@ def analyze(led: pd.DataFrame, cfg: dict) -> dict[str, pd.DataFrame]:
         (f"Solo confianza alta (prob ≥ {hi_t:.0%})",
          f"{int(alta['acierto'].sum())} de {len(alta)} ({pct(alta['acierto'].mean()) if len(alta) else '—'}); "
          + money(alta["beneficio_pronostico"].dropna())),
+        ("APUESTA RECOMENDADA de cada partido (el tipo de apuesta más probable)",
+         f"{int(kr)} de {n} ({pct(kr / n)}, IC 95% {pct(rec_lo)} – {pct(rec_hi)}); "
+         + money(d["beneficio_recomendada"].dropna()) if n else "—"),
+        ("  de ellas, las que no son al ganador (goles, ambos marcan, doble oportunidad)",
+         f"{int(otros['acierto_rec'].sum())} de {len(otros)} ({pct(otros['acierto_rec'].mean())})" if len(otros)
+         else "ninguna liquidada todavía (empiezan a contar con los partidos de fútbol predichos desde ahora)"),
         ("SELECCIÓN DEL DÍA (lo único pensado para apostar)",
-         f"{int(sel['acierto'].sum())} de {len(sel)} ({pct(sel['acierto'].mean())}, IC 95% {pct(sel_lo)} – {pct(sel_hi)}); "
-         + money(sel["beneficio_pronostico"].dropna()) if len(sel) else "sin partidos liquidados todavía"),
+         f"{int(sel['acierto_rec'].sum())} de {len(sel)} ({pct(sel['acierto_rec'].mean())}, IC 95% {pct(sel_lo)} – {pct(sel_hi)}); "
+         + money(sel["beneficio_recomendada"].dropna()) if len(sel) else "sin partidos liquidados todavía"),
         ("Apuestas de valor 1X2 (1 u)", money(vb)),
         ("Apuestas de valor Over/Under (1 u)", money(vbo)),
         ("MIS APUESTAS REALES", bet_line(real_b)),
@@ -216,7 +267,9 @@ def analyze(led: pd.DataFrame, cfg: dict) -> dict[str, pd.DataFrame]:
         "Mis apuestas": bets[["fecha", "deporte", "liga", "local", "visitante", "apostado_a", "apuesta_tipo",
                               "cuota_real", "stake_real", "estado_apuesta", "beneficio_real", "seleccion", "prob",
                               "marcador"]].rename(columns={"estado_apuesta": "estado", "prob": "prob_pronostico"}),
-        "Selección": _group(d, "seleccion", ["Sí", "No"]),
+        "Selección": _group(d, "seleccion", ["Sí", "No"], rec=True),
+        "Por tipo de apuesta": _group(d, "tipo_apuesta", rec=True),
+        "Tipos de apuesta (fútbol)": markets_table(scored),
         "Modelo vs mercado": model_vs_market(scored),
         "Por confianza": _group(d, "confianza", LEVELS),
         "Por deporte": _group(d, "deporte"),
@@ -260,9 +313,10 @@ def model_vs_market(scored: pd.DataFrame) -> pd.DataFrame:
 
 
 PCT = {"probabilidad", "prob_pronostico", "acierto_historico", "prob_modelo", "prob_mercado", "prob_media_del_pronostico", "pct_acierto", "ic95_inf", "ic95_sup", "prob_media_modelo", "pct_acierto_mercado", "yield", "prob", "p_1",
-       "p_X", "p_2", "prob_ou", "pct_acierto_acumulado"}
+       "p_X", "p_2", "prob_ou", "pct_acierto_acumulado", "prob_recomendada", "prob_ganador"}
 MONEY = {"beneficio_u", "beneficio_acumulado_u", "beneficio_pronostico", "beneficio_valor", "beneficio_valor_ou",
-         "beneficio_real"}
+         "beneficio_real", "beneficio_recomendada"}
+STATE_COLS = {"estado", "estado_recomendada"}
 FILL = {"Acertó": "C6EFCE", "Falló": "FFC7CE", "Pendiente": "FFF2CC", "Ganada": "C6EFCE", "Perdida": "FFC7CE"}
 
 
@@ -307,7 +361,7 @@ def _fmt(col: str, v) -> tuple[str, str]:
             return f"{v:+,.2f}", "num"
         return (f"{v:,.0f}" if abs(v) >= 1000 and float(v).is_integer() else f"{v:.2f}"), "num"
     text = html.escape(str(v))
-    return text, (str(v) if col == "estado" and str(v) in FILL else "txt" if len(text) > 60 else "")
+    return text, (str(v) if col in STATE_COLS and str(v) in FILL else "txt" if len(text) > 60 else "")
 
 
 def save_html(tables: dict[str, pd.DataFrame], path: Path, title: str = "", notes: list[str] | None = None) -> Path:
@@ -379,7 +433,7 @@ def save_workbook(tables: dict[str, pd.DataFrame], path: Path, title: str = "", 
                     cell.number_format = "+0.00;-0.00;0.00"
                 elif isinstance(v, float):
                     cell.number_format = "0.00"
-                if c == "estado" and v in FILL:
+                if c in STATE_COLS and v in FILL:
                     cell.fill = PatternFill("solid", fgColor=FILL[v])
         for j, c in enumerate(df.columns, 1):
             width = max([len(str(c))] + [len(str(v)) for v in df[c].head(300)]) + 2

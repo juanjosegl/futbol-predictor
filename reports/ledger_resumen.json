@@ -1,22 +1,29 @@
 {
-  "liquidadas_ahora": 9,
-  "total_liquidadas": 17,
-  "validas_antes_del_partido": 17,
-  "pendientes": 36,
-  "accuracy_modelo": 0.7647058823529411,
-  "accuracy_mercado": 0.8888888888888888,
+  "liquidadas_ahora": 2,
+  "total_liquidadas": 36,
+  "validas_antes_del_partido": 35,
+  "pendientes": 50,
+  "accuracy_modelo": 0.6571428571428571,
+  "accuracy_mercado": 0.7083333333333334,
   "accuracy_over_under": NaN,
-  "log_loss_modelo": 0.5731317327522277,
-  "log_loss_mercado_mismas": 0.493788168990294,
-  "log_loss_modelo_mismas": 0.5133999124170351,
+  "log_loss_modelo": 0.6261808192624447,
+  "log_loss_mercado_mismas": 0.5891865763258396,
+  "log_loss_modelo_mismas": 0.5987099788542737,
   "pronosticos_1u": {
-    "n": 9,
-    "beneficio_u": 3.0597,
-    "yield": 0.33996666666666664
+    "n": 24,
+    "beneficio_u": 1.8830999999999993,
+    "yield": 0.07846249999999998
+  },
+  "apuesta_recomendada": {
+    "n": 35,
+    "aciertos": 23,
+    "accuracy": 0.6571428571428571,
+    "beneficio_u": 1.8830999999999996,
+    "apuestas_con_cuota": 24
   },
   "value_bets_1x2": {
-    "n": 1,
-    "beneficio_u": -1.0,
+    "n": 3,
+    "beneficio_u": -3.0,
     "yield": -1.0
   },
   "value_bets_ou": {
@@ -32,45 +39,45 @@
   "por_confianza": [
     {
       "confianza": "Alta",
-      "partidos": 1,
-      "aciertos": 1,
+      "partidos": 4,
+      "aciertos": 4,
       "pct_acierto": 1.0,
-      "ic95_inf": 0.20654329147389294,
+      "ic95_inf": 0.5100999795960008,
       "ic95_sup": 1.0,
-      "prob_media_modelo": 0.7182,
+      "prob_media_modelo": 0.7360749999999999,
       "pct_acierto_mercado": 1.0,
-      "cuota_media": 1.3279,
-      "apuestas_con_cuota": 1,
-      "beneficio_u": 0.3279000000000001,
-      "yield": 0.3279000000000001
+      "cuota_media": 1.320275,
+      "apuestas_con_cuota": 4,
+      "beneficio_u": 1.2811,
+      "yield": 0.320275
     },
     {
       "confianza": "Media",
-      "partidos": 14,
-      "aciertos": 11,
-      "pct_acierto": 0.7857142857142857,
-      "ic95_inf": 0.5241027622679172,
-      "ic95_sup": 0.9242875166308363,
-      "prob_media_modelo": 0.6271071428571429,
-      "pct_acierto_mercado": 0.8571428571428571,
-      "cuota_media": 1.5324571428571427,
-      "apuestas_con_cuota": 7,
-      "beneficio_u": 2.0515,
-      "yield": 0.29307142857142854
+      "partidos": 23,
+      "aciertos": 15,
+      "pct_acierto": 0.6521739130434783,
+      "ic95_inf": 0.4488997690689164,
+      "ic95_sup": 0.8118894536301776,
+      "prob_media_modelo": 0.616395652173913,
+      "pct_acierto_mercado": 0.7142857142857143,
+      "cuota_media": 1.5442571428571428,
+      "apuestas_con_cuota": 14,
+      "beneficio_u": 1.2828999999999997,
+      "yield": 0.09163571428571426
     },
     {
       "confianza": "Baja",
-      "partidos": 2,
-      "aciertos": 1,
+      "partidos": 8,
+      "aciertos": 4,
       "pct_acierto": 0.5,
-      "ic95_inf": 0.09452865480086614,
-      "ic95_sup": 0.9054713451991339,
-      "prob_media_modelo": 0.5338499999999999,
-      "pct_acierto_mercado": 1.0,
-      "cuota_media": 1.6803,
-      "apuestas_con_cuota": 1,
-      "beneficio_u": 0.6802999999999999,
-      "yield": 0.6802999999999999
+      "ic95_inf": 0.21521252682444186,
+      "ic95_sup": 0.7847874731755582,
+      "prob_media_modelo": 0.5275249999999999,
+      "pct_acierto_mercado": 0.5,
+      "cuota_media": 1.7920666666666667,
+      "apuestas_con_cuota": 6,
+      "beneficio_u": -0.6809000000000001,
+      "yield": -0.11348333333333334
     }
   ]
 }

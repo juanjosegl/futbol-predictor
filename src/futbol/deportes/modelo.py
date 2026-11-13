@@ -11,6 +11,9 @@ Para cada partido se calculan variables SOLO con partidos anteriores (un único 
 - `exp`:      diferencia de experiencia (log de partidos jugados; importa sobre todo en tenis).
 - `local`:    1 si hay ventaja de campo (0 en tenis y campo neutral).
 
+En fútbol se validan además los demás tipos de apuesta (total de goles, ambos marcan, doble oportunidad;
+ver mercados.py) sobre los mismos partidos de test -> reports/deportes_mercados.csv.
+
 Con esas variables se ajusta una regresión logística (multinomial si el deporte admite empate).
 Validación walk-forward por año: para predecir el año A se entrena solo con lo anterior a A.
 """
@@ -29,6 +32,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..config import get_path
 from ..evaluation.informe import LEVELS, confidence, wilson
+from . import mercados
 
 log = logging.getLogger(__name__)
 
@@ -157,8 +161,9 @@ def _burn_in(ev: pd.DataFrame) -> np.ndarray:
     return (ev["inicio_utc"] > ev["inicio_utc"].min() + pd.Timedelta(days=365)).to_numpy()
 
 
-def evaluate_league(ev: pd.DataFrame, lg: dict, cfg: dict) -> tuple[dict, pd.DataFrame, dict] | None:
-    """Walk-forward por año natural. Devuelve (métricas, calibración por confianza, parámetros) o None."""
+def evaluate_league(ev: pd.DataFrame, lg: dict, cfg: dict) -> tuple[dict, pd.DataFrame, dict, pd.DataFrame | None] | None:
+    """Walk-forward por año natural. Devuelve (métricas, calibración por confianza, parámetros, calibración
+    por tipo de apuesta) o None. La última solo existe en fútbol (mercados de goles); en el resto es None."""
     dcfg = cfg.get("deportes") or {}
     draw = bool(lg.get("empate"))
     ev = ev[ev["terminado"]].reset_index(drop=True)
@@ -203,7 +208,17 @@ def evaluate_league(ev: pd.DataFrame, lg: dict, cfg: dict) -> tuple[dict, pd.Dat
                      "prob_media_modelo": float(pp[m].mean()) if m.any() else np.nan, "ic95_inf": lo, "ic95_sup": hi})
         metrics[f"acierto_{level.lower()}"] = rows[-1]["acierto"]
         metrics[f"n_{level.lower()}"] = int(m.sum())
-    return metrics, pd.DataFrame(rows), params
+    mcal = None
+    if lg["sport"] == "soccer":  # tipos de apuesta: mismos partidos de test, goles esperados solo con el pasado
+        params.update(mercados.tune_goals(ev[ev["inicio_utc"] < first]))
+        lam, mu = mercados.run_goals(ev, params["g_eta"])
+        lam, mu = mercados.reconcile(lam[ok], mu[ok], p[:, 0], p[:, 2], params["g_rho"])
+        probs = mercados.market_probs(p, mercados.score_matrix(lam, mu, params["g_rho"]))
+        hg, ag = ev["home_score"].to_numpy(float)[ok], ev["away_score"].to_numpy(float)[ok]
+        low = np.minimum(hg, ag)  # decidido en prórroga o penaltis: a los 90' fue empate
+        hg, ag = np.where(yy == 1, low, hg), np.where(yy == 1, low, ag)
+        mcal = mercados.calibrate(probs, hg, ag, lg["id"])
+    return metrics, pd.DataFrame(rows), params, mcal
 
 
 def evaluate(cfg: dict, ev: pd.DataFrame, only: list[str] | None = None) -> pd.DataFrame:
@@ -211,16 +226,18 @@ def evaluate(cfg: dict, ev: pd.DataFrame, only: list[str] | None = None) -> pd.D
     from .espn import leagues
 
     rep, mdir = get_path(cfg, "reports"), get_path(cfg, "models")
-    mets, cals, params = [], [], load_params(cfg)
+    mets, cals, mcals, params = [], [], [], load_params(cfg)
     for lg in leagues(cfg, only):
         res = evaluate_league(ev[ev["liga"] == lg["id"]], lg, cfg)
         if res is None:
             log.warning("%s: historial insuficiente; no se darán pronósticos de esta liga.", lg["nombre"])
             params.pop(lg["id"], None)
             continue
-        m, c, p = res
+        m, c, p, mc = res
         mets.append(m)
         cals.append(c)
+        if mc is not None:
+            mcals.append(mc)
         params[lg["id"]] = p
         log.info("%-28s test %s  n=%5d  acierto %.1f%% (local siempre %.1f%%)  confianza alta: %.1f%% en %d",
                  lg["nombre"], m["anios_test"], m["partidos_test"], 100 * m["acierto"],
@@ -234,6 +251,12 @@ def evaluate(cfg: dict, ev: pd.DataFrame, only: list[str] | None = None) -> pd.D
         cal = pd.concat([old[1][~old[1]["liga"].isin(cal["liga"])], cal], ignore_index=True)
     met.sort_values("acierto", ascending=False).round(4).to_csv(rep / "deportes_metricas.csv", index=False)
     cal.round(4).to_csv(rep / "deportes_calibracion.csv", index=False)
+    if mcals:
+        mcal = pd.concat(mcals, ignore_index=True)
+        if only and (rep / "deportes_mercados.csv").exists():
+            prev = pd.read_csv(rep / "deportes_mercados.csv", dtype={"mercado": str})
+            mcal = pd.concat([prev[~prev["liga"].isin(mcal["liga"])], mcal], ignore_index=True)
+        mcal.round(4).to_csv(rep / "deportes_mercados.csv", index=False)
     (mdir / "deportes_params.json").write_text(json.dumps(params, indent=2), encoding="utf-8")
     return met
 
@@ -257,4 +280,7 @@ def predict_upcoming(ev: pd.DataFrame, lg: dict, params: dict) -> pd.DataFrame:
     out["mod_p_home"], out["mod_p_draw"], out["mod_p_away"] = P[:, 0], P[:, 1], P[:, 2]
     for j, f in enumerate(FEATS):
         out[f"x_{f}"] = F[up, j]
+    if lg["sport"] == "soccer" and "g_eta" in params:  # goles esperados, para los mercados de goles
+        lam, mu = mercados.run_goals(ev, params["g_eta"])
+        out["xg_home"], out["xg_away"] = lam[up], mu[up]
     return out

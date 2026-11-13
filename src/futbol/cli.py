@@ -164,7 +164,7 @@ def hoy(dias: Optional[int] = typer.Option(None, "--dias", "-d", help="Días hac
         liga: Optional[list[str]] = LigaOpt,
         no_ledger: bool = typer.Option(False, "--no-ledger", help="No registrar en el ledger ni liquidar."),
         config: Optional[Path] = ConfigOpt):
-    """UN SOLO COMANDO: actualiza datos de todos los deportes, liquida lo pendiente y da los pronósticos del día."""
+    """UN SOLO COMANDO: actualiza datos, liquida lo pendiente y da la apuesta recomendada de cada partido del día."""
     from .deportes.hoy import hoy as _hoy
 
     _hoy(_init(config), days=dias, top=top, record=not no_ledger, only=liga)
@@ -196,7 +196,7 @@ def apuesta(equipo: str = typer.Argument(..., help="Nombre (o parte) de uno de l
             cuota: float = typer.Option(..., "--cuota", "-c", help="Cuota decimal a la que apostaste en tu casa (p. ej. 1.35)."),
             monto: Optional[float] = typer.Option(None, "--monto", "-m", help="Dinero apostado."),
             papel: bool = typer.Option(False, "--papel", help="Apuesta simulada, sin dinero (para medir antes de arriesgar)."),
-            a: Optional[str] = typer.Option(None, "--a", help="A qué apostaste si no es al pronóstico: 1, X, 2, Over, Under o un nombre."),
+            a: Optional[str] = typer.Option(None, "--a", help="A qué apostaste si no es a la apuesta recomendada: un nombre, 1, X, 2, 1X, X2, O1.5, O2.5, U2.5, U3.5, BTTS, NOBTTS."),
             fecha: Optional[str] = typer.Option(None, "--fecha", help="AAAA-MM-DD, si hay varios partidos pendientes de ese equipo."),
             config: Optional[Path] = ConfigOpt):
     """Anota una apuesta simple (real o de papel) sobre un partido pendiente; se liquida sola con el resultado."""
