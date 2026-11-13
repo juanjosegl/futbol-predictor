@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import get_path
-from ..ingest import clubelo, football_data, understat
+from ..ingest import clubelo, football_data, football_data_org, understat
 from ..ingest.team_names import TeamNameMapper
 from .engineering import add_targets, build_features
 from .odds import add_market_probs
@@ -51,6 +51,16 @@ def build_dataset(cfg: dict) -> pd.DataFrame:
     log.info("football-data: %d partidos", len(matches))
     by_league = {lg: sorted(set(g["home_team"]) | set(g["away_team"])) for lg, g in matches.groupby("league")}
     mapper = TeamNameMapper(by_league, threshold=cfg["team_names"]["fuzzy_threshold"])
+    matches["source"] = "football-data.co.uk"
+
+    # Respaldo: partidos jugados que aún no están en football-data.co.uk (p. ej. si está bloqueado)
+    if cfg["sources"].get("football_data_org", True):
+        extra = football_data_org.missing_played(matches, football_data_org.load(cfg, mapper))
+        if not extra.empty:
+            extra["source"] = "football-data.org"
+            matches = pd.concat([matches, extra], ignore_index=True)
+            log.info("football-data.org: +%d partidos recientes (solo resultado, sin tiros ni cuotas); "
+                     "último %s", len(extra), extra["date"].max().date())
 
     # xG: Understat si existe; si no, xG de football-data (disponible desde 2026/27)
     us = understat.load(cfg) if cfg["sources"].get("understat", True) else pd.DataFrame()
@@ -92,6 +102,7 @@ def build_dataset(cfg: dict) -> pd.DataFrame:
         "xg_coverage": matches["xg_source"].value_counts().to_dict(),
         "clubelo_coverage": float(matches["f_clubelo_h"].notna().mean()) if "f_clubelo_h" in matches else 0.0,
         "close_odds_source": matches["close_src"].value_counts().to_dict(),
+        "match_source": matches["source"].value_counts().to_dict(),
         "n_features": int(sum(c.startswith("f_") for c in matches.columns)),
         "unmatched_team_names": int(len(unmatched)),
     }

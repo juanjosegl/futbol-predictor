@@ -25,6 +25,9 @@ from .plots import bankroll_curves
 
 log = logging.getLogger(__name__)
 
+MODEL_NAMES = {"lgbm": "LightGBM", "dc": "Dixon-Coles", "rl": "Regresión logística",
+               "rlm": "Reg. logística + mercado"}
+
 MARKETS = {
     "1x2": {
         "outcomes": ["H", "D", "A"],
@@ -32,7 +35,8 @@ MARKETS = {
         "close": ["close_h", "close_d", "close_a"],
         "open": ["open_h", "open_d", "open_a"],
         "fair_close": ["mkt_close_h", "mkt_close_d", "mkt_close_a"],
-        "models": {"lgbm": ["lgbm_ph", "lgbm_pd", "lgbm_pa"], "dc": ["dc_ph", "dc_pd", "dc_pa"]},
+        "models": {"lgbm": ["lgbm_ph", "lgbm_pd", "lgbm_pa"], "dc": ["dc_ph", "dc_pd", "dc_pa"],
+                   "rl": ["rl_ph", "rl_pd", "rl_pa"], "rlm": ["rlm_ph", "rlm_pd", "rlm_pa"]},
     },
     "ou25": {
         "outcomes": ["Over", "Under"],
@@ -40,7 +44,8 @@ MARKETS = {
         "close": ["close_over", "close_under"],
         "open": ["open_over", "open_under"],
         "fair_close": ["mkt_close_over", "_mkt_close_under"],
-        "models": {"lgbm": ["lgbm_pover", "_lgbm_punder"], "dc": ["dc_pover", "_dc_punder"]},
+        "models": {"lgbm": ["lgbm_pover", "_lgbm_punder"], "dc": ["dc_pover", "_dc_punder"],
+                   "rl": ["rl_pover", "_rl_punder"], "rlm": ["rlm_pover", "_rlm_punder"]},
     },
 }
 
@@ -156,6 +161,9 @@ def _prepare(df: pd.DataFrame) -> pd.DataFrame:
     df["_mkt_close_under"] = 1 - df["mkt_close_over"]
     df["_lgbm_punder"] = 1 - df["lgbm_pover"]
     df["_dc_punder"] = 1 - df["dc_pover"]
+    for m in ("rl", "rlm"):
+        if f"{m}_pover" in df:
+            df[f"_{m}_punder"] = 1 - df[f"{m}_pover"]
     return df
 
 
@@ -171,6 +179,9 @@ def backtest(cfg: dict) -> pd.DataFrame:
         spec = MARKETS[market]
         for model in bcfg["models"]:
             curves = {}
+            if spec["models"][model][0] not in oos.columns:
+                log.warning("Modelo %s sin predicciones (¿falta `train`?); se omite", model)
+                continue
             for price in ("close", "open"):
                 sub = oos.dropna(subset=spec["models"][model][:1] + spec[price])
                 bets = select_bets(sub, spec["models"][model], spec[price], spec["won"](sub), spec["outcomes"],
@@ -188,7 +199,7 @@ def backtest(cfg: dict) -> pd.DataFrame:
                         rows.append({"market": market, "model": model, "price": price, "strategy": strat,
                                      "season": season, **gs})
             bankroll_curves(curves, rep / f"bankroll_{market}_{model}.png",
-                            f"Bankroll · {market.upper()} · {'LightGBM' if model == 'lgbm' else 'Dixon-Coles'}"
+                            f"Bankroll · {market.upper()} · {MODEL_NAMES.get(model, model)}"
                             f" (umbral {bcfg['threshold']:.0%})", init)
     res = pd.DataFrame(rows)
     res["season"] = res.get("season", pd.Series(dtype=object)).fillna("TOTAL")

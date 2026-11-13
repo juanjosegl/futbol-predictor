@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mlflow-ui",
+      "runtimeExecutable": ".venv/bin/mlflow",
+      "runtimeArgs": ["ui", "--host", "127.0.0.1", "--port", "5050", "--backend-store-uri", "sqlite:///mlflow.db"],
+      "port": 5050
+    }
+  ]
+}

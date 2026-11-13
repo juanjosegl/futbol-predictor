@@ -1,0 +1,85 @@
+{
+  "desde": "2026-10-01",
+  "hasta": "2026-11-02",
+  "partidos": 202,
+  "modelo_principal": "Reg. logística + mercado",
+  "umbral": 0.05,
+  "aciertos_modelo": 121,
+  "accuracy_modelo": 0.599009900990099,
+  "accuracy_mercado": 0.6039603960396039,
+  "apuestas_valor": {
+    "n": 0,
+    "ganadas": 0,
+    "beneficio_u": 0.0,
+    "yield": null
+  },
+  "metricas": [
+    {
+      "modelo": "Reg. logística + mercado",
+      "n": 202,
+      "log_loss": 0.92795,
+      "brier": 0.54569,
+      "accuracy": 0.59901,
+      "vs_apertura": 0.00021,
+      "ic95_inf": -0.00516,
+      "ic95_sup": 0.00568,
+      "accuracy_over25": 0.58911
+    },
+    {
+      "modelo": "Reg. logística (stats)",
+      "n": 202,
+      "log_loss": 0.97595,
+      "brier": 0.57826,
+      "accuracy": 0.54455,
+      "vs_apertura": 0.04821,
+      "ic95_inf": 0.01071,
+      "ic95_sup": 0.08432,
+      "accuracy_over25": 0.5396
+    },
+    {
+      "modelo": "LightGBM",
+      "n": 202,
+      "log_loss": 0.94537,
+      "brier": 0.55681,
+      "accuracy": 0.57921,
+      "vs_apertura": 0.01763,
+      "ic95_inf": -0.00979,
+      "ic95_sup": 0.04638,
+      "accuracy_over25": 0.56436
+    },
+    {
+      "modelo": "Dixon-Coles",
+      "n": 202,
+      "log_loss": 0.95115,
+      "brier": 0.56297,
+      "accuracy": 0.58416,
+      "vs_apertura": 0.02341,
+      "ic95_inf": 0.00059,
+      "ic95_sup": 0.04551,
+      "accuracy_over25": 0.58911
+    },
+    {
+      "modelo": "Mercado apertura",
+      "n": 202,
+      "log_loss": 0.92774,
+      "brier": 0.5456,
+      "accuracy": 0.60396,
+      "vs_apertura": 0.0,
+      "ic95_inf": 0.0,
+      "ic95_sup": 0.0,
+      "accuracy_over25": 0.59406
+    },
+    {
+      "modelo": "Mercado cierre",
+      "n": 202,
+      "log_loss": 0.92916,
+      "brier": 0.54615,
+      "accuracy": 0.60891,
+      "vs_apertura": 0.00142,
+      "ic95_inf": -0.007,
+      "ic95_sup": 0.00978,
+      "accuracy_over25": 0.59901
+    }
+  ],
+  "nota": "vs_apertura < 0 = mejor que el mercado de apertura; IC 95% bootstrap. Con pocos partidos los resultados son muy ruidosos."
+}

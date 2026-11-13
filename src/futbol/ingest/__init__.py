@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 from ..config import get_path
-from . import clubelo, football_data, sofascore, understat
+from . import clubelo, football_data, football_data_org, sofascore, understat
 from .team_names import TeamNameMapper
 
 log = logging.getLogger(__name__)
@@ -20,9 +20,16 @@ def download_all(cfg: dict, refresh: bool = False, refresh_current: bool = False
     status = {}
     football_data.download(cfg, refresh=refresh, refresh_current=refresh_current)
     status["football_data"] = "ok"
-    football_data.download_fixtures(cfg, refresh=refresh or refresh_current)
+    fx = football_data.download_fixtures(cfg, refresh=refresh or refresh_current)
+
+    def _fdorg():
+        st = football_data_org.download(cfg, refresh=True)
+        if st == "ok" and fx is None:  # football-data.co.uk no dio próximos partidos: se usa el calendario de la API
+            football_data_org.write_upcoming(cfg, football_data_org.load(cfg, canonical_mapper(cfg)))
+        return st
 
     for name, fn in [
+        ("football_data_org", _fdorg),
         ("understat", lambda: understat.download(cfg, refresh=refresh)),
         ("clubelo", lambda: clubelo.download(cfg, lambda: canonical_mapper(cfg), refresh=refresh)),
         ("sofascore", lambda: sofascore.download(cfg, refresh=refresh)),

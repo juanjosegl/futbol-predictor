@@ -54,6 +54,9 @@
     "pinnacle": 11605,
     "avg": 1306
   },
+  "match_source": {
+    "football-data.co.uk": 12911
+  },
   "n_features": 93,
   "unmatched_team_names": 0
 }

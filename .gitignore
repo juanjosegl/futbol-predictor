@@ -4,7 +4,14 @@ __pycache__/
 .pytest_cache/
 data/raw/
 data/processed/
-models/
-logs/
+/models/
+/logs/
 reports/backtest_bets.csv
 .DS_Store
+.env
+~$*.xlsx
+
+# MLflow (generados)
+mlflow.db
+mlruns/
+docker/build/

@@ -1,0 +1,20 @@
+# Punto de entrada MLOps: mlflow run . --env-manager local
+# Carga antes .env (MLFLOW_TRACKING_URI y MLFLOW_EXPERIMENT_NAME) para que el
+# run padre quede en el mismo almacén que src/futbol/mlops/config.py.
+# --env-manager local reutiliza el entorno ya instalado (.venv).
+
+name: futbol-predictor-mlops
+
+entry_points:
+  main:
+    command: "python -m futbol.mlops.train"
+  register:
+    command: "python -m futbol.mlops.register"
+  predict:
+    command: "python -m futbol.mlops.predict"
+  ejemplo_api:
+    parameters:
+      puerto: {type: float, default: 5001}
+    command: "python -m futbol.mlops.ejemplo_api --puerto {puerto}"
+  pipeline:
+    command: "python -m futbol.mlops.train && python -m futbol.mlops.register && python -m futbol.mlops.predict"

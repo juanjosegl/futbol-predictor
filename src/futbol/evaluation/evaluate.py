@@ -17,6 +17,8 @@ MODELS_1X2 = {
     "LightGBM (calibrado)": ["lgbm_ph", "lgbm_pd", "lgbm_pa"],
     "LightGBM (sin calibrar)": ["lgbmraw_ph", "lgbmraw_pd", "lgbmraw_pa"],
     "Dixon-Coles": ["dc_ph", "dc_pd", "dc_pa"],
+    "Regresión logística (stats)": ["rl_ph", "rl_pd", "rl_pa"],
+    "Regresión logística + mercado": ["rlm_ph", "rlm_pd", "rlm_pa"],
     "Mercado apertura": ["mkt_open_h", "mkt_open_d", "mkt_open_a"],
     "Mercado cierre": ["mkt_close_h", "mkt_close_d", "mkt_close_a"],
 }
@@ -24,6 +26,8 @@ MODELS_OU = {
     "LightGBM (calibrado)": "lgbm_pover",
     "LightGBM (sin calibrar)": "lgbmraw_pover",
     "Dixon-Coles": "dc_pover",
+    "Regresión logística (stats)": "rl_pover",
+    "Regresión logística + mercado": "rlm_pover",
     "Mercado apertura": "mkt_open_over",
     "Mercado cierre": "mkt_close_over",
 }
@@ -86,7 +90,7 @@ def evaluate(cfg: dict) -> dict:
 
     # Reliability diagrams (3 series: modelo principal, baseline DC, mercado de cierre)
     y = df["y_1x2"].to_numpy()
-    show = ["LightGBM (calibrado)", "Dixon-Coles", "Mercado cierre"]
+    show = ["LightGBM (calibrado)", "Dixon-Coles", "Regresión logística + mercado", "Mercado cierre"]
     reliability_diagram(
         {"Local (1)": (y == 0).astype(int), "Empate (X)": (y == 1).astype(int), "Visitante (2)": (y == 2).astype(int)},
         {m: dict(zip(["Local (1)", "Empate (X)", "Visitante (2)"], df[MODELS_1X2[m]].to_numpy().T)) for m in show},
@@ -97,11 +101,15 @@ def evaluate(cfg: dict) -> dict:
         rep / "calibration_ou25.png", f"Calibración Over 2.5 (n={len(dfo)})")
 
     beats = bool(t1.set_index("modelo").loc["LightGBM (calibrado)", "ic95_sup"] < 0)
+    models_only = t1[~t1["modelo"].str.startswith("Mercado")]
+    best = models_only.sort_values("log_loss").iloc[0]
     summary = {
         "n_1x2": len(df), "n_ou25": len(dfo), "seasons": sorted(df["season"].unique().tolist()),
         "metrics_1x2": t1.round(5).to_dict(orient="records"),
         "metrics_ou25": t2.round(5).to_dict(orient="records"),
         "lgbm_beats_closing_market_1x2": beats,
+        "mejor_modelo_1x2": best["modelo"],
+        "mejor_modelo_supera_cierre": bool(best["ic95_sup"] < 0),
         "nota": "dif_logloss_vs_cierre < 0 significa mejor que el mercado de cierre; "
                 "IC 95% por bootstrap pareado.",
     }
@@ -109,7 +117,8 @@ def evaluate(cfg: dict) -> dict:
     with pd.option_context("display.width", 200, "display.max_columns", 20):
         log.info("Métricas 1X2:\n%s", t1.round(4).to_string(index=False))
         log.info("Métricas Over/Under 2.5:\n%s", t2.round(4).to_string(index=False))
-    if not beats:
-        log.info("Conclusión: LightGBM NO supera al mercado de cierre en log loss 1X2.")
+    log.info("Mejor modelo 1X2: %s (log loss %.4f; vs cierre %+.4f, IC95 %+.4f a %+.4f) -> %s", best["modelo"],
+             best["log_loss"], best["dif_logloss_vs_cierre"], best["ic95_inf"], best["ic95_sup"],
+             "SUPERA al mercado de cierre" if best["ic95_sup"] < 0 else "NO supera al mercado de cierre")
     return summary
 
