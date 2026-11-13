@@ -211,23 +211,30 @@ def apuesta(equipo: str = typer.Argument(..., help="Nombre (o parte) de uno de l
 
 
 @app.command()
-def ver(config: Optional[Path] = ConfigOpt):
-    """Abre la selección del día (reports/hoy.xlsx) y el seguimiento de aciertos (reports/seguimiento.xlsx)."""
+def ver(excel: bool = typer.Option(False, "--excel", help="Abrir los .xlsx en vez de la versión web (necesita Excel o Numbers)."),
+        config: Optional[Path] = ConfigOpt):
+    """Abre en el navegador la selección del día (reports/hoy.html) y el seguimiento (reports/seguimiento.html)."""
     import subprocess
     import sys
+    import webbrowser
 
     rep = get_path(_init(config), "reports")
-    files = [f for f in (rep / "hoy.xlsx", rep / "seguimiento.xlsx") if f.exists()]
+    ext = ".xlsx" if excel else ".html"
+    files = [f for f in (rep / f"hoy{ext}", rep / f"seguimiento{ext}") if f.exists()]
     if not files:
         log.warning("Todavía no hay documentos: ejecuta primero `futbol hoy`.")
     for f in files:
         log.info("Abriendo %s", f)
         if sys.platform == "darwin":
-            subprocess.run(["open", str(f)], check=False)
+            r = subprocess.run(["open", str(f)], capture_output=True, text=True)
+            if r.returncode != 0:
+                log.error("No hay ninguna aplicación para abrir %s. %s", f.name,
+                          "Usa `futbol ver` (versión web) o instala Numbers (gratis en el App Store)." if excel
+                          else "Ábrelo arrastrándolo a Chrome o Safari.")
         elif sys.platform.startswith("win"):
             __import__("os").startfile(str(f))  # noqa: S606
         else:
-            subprocess.run(["xdg-open", str(f)], check=False)
+            webbrowser.open(f.as_uri())
 
 
 @app.command("deportes-descargar")

@@ -24,19 +24,24 @@ Si el Mac está dormido a esa hora, lo hace al despertar. Si está apagado, ese 
 .venv/bin/futbol ver
 ```
 
-Abre los dos documentos (también puedes abrirlos a mano desde la carpeta `reports/`):
+Abre en tu navegador (Chrome o Safari) los dos documentos. **No hace falta Excel ni ningún otro programa.**
+Arriba de cada página hay botones para saltar a cada sección:
 
 | Documento | Qué tiene |
 |---|---|
-| `reports/hoy.xlsx` → hoja **Selección del día** | Los pocos partidos pensados para apostar hoy y mañana. **Es la única hoja que necesitas para decidir.** |
-| `reports/hoy.xlsx` → hoja **Todos los partidos** | Todos los pronósticos, de más a menos probable (solo para consultar). |
-| `reports/seguimiento.xlsx` → **Resumen** | Aciertos, rendimiento de la selección y de tus apuestas. |
-| `reports/seguimiento.xlsx` → **Mis apuestas** | Cada apuesta que anotaste: Pendiente / Ganada / Perdida y cuánto dio. |
-| `reports/seguimiento.xlsx` → **Selección** | ¿La selección acierta lo que promete? Selección frente al resto. |
-| `reports/seguimiento.xlsx` → **Modelo vs mercado** | ¿Funciona el modelo local? Modelo solo, cuotas y combinación sobre los mismos partidos. |
-| `reports/seguimiento.xlsx` → **Predicciones** | Todas las predicciones con su resultado (verde acertó, rojo falló, amarillo pendiente). |
+| `reports/hoy.html` → **Selección del día** | Los pocos partidos pensados para apostar hoy y mañana. **Es la única hoja que necesitas para decidir.** |
+| `reports/hoy.html` → **Todos los partidos** | Todos los pronósticos, de más a menos probable (solo para consultar). |
+| `reports/seguimiento.html` → **Resumen** | Aciertos, rendimiento de la selección y de tus apuestas. |
+| `reports/seguimiento.html` → **Mis apuestas** | Cada apuesta que anotaste: Pendiente / Ganada / Perdida y cuánto dio. |
+| `reports/seguimiento.html` → **Selección** | ¿La selección acierta lo que promete? Selección frente al resto. |
+| `reports/seguimiento.html` → **Modelo vs mercado** | ¿Funciona el modelo local? Modelo solo, cuotas y combinación sobre los mismos partidos. |
+| `reports/seguimiento.html` → **Predicciones** | Todas las predicciones con su resultado (verde acertó, rojo falló, amarillo pendiente). |
 
-Cierra los Excel cuando termines de mirarlos: si están abiertos a las 07:00 o a las 17:00, no se pueden actualizar.
+Las páginas no se actualizan solas mientras las tienes abiertas: después de cada ejecución, recarga la pestaña
+(Cmd + R) o vuelve a ejecutar `futbol ver`.
+
+La misma información se guarda también como `hoy.xlsx` y `seguimiento.xlsx`, por si algún día instalas Numbers
+(gratis en el App Store) o Excel, o para entregarla en la universidad. Se abren con `.venv/bin/futbol ver --excel`.
 
 ## 3. Cómo se elige la selección del día
 
@@ -48,7 +53,7 @@ Un partido entra solo si cumple todo esto:
 - Si hay cuotas, **el mercado tiene al mismo favorito** que el modelo.
 - Como mucho **5 partidos por día**, los de mayor probabilidad.
 
-Si la hoja sale vacía, ese día no hay nada que cumpla: no se apuesta. Habrá días así.
+Si la sección sale vacía, ese día no hay nada que cumpla: no se apuesta. Habrá días así.
 
 Columnas que importan:
 
@@ -63,7 +68,7 @@ Columnas que importan:
 
 ## 4. Rutina diaria (5 minutos)
 
-1. Abre `reports/hoy.xlsx`, hoja **Selección del día**.
+1. Ejecuta `.venv/bin/futbol ver` y mira la sección **Selección del día**.
 2. Busca cada partido en tu casa de apuestas y mira qué cuota paga por `apostar_a`.
 3. Anota la apuesta con un comando (no edites los archivos a mano). Basta una parte del nombre del equipo o jugador:
 
@@ -87,13 +92,13 @@ que la medición valga.
 
 ## 5. Cómo medir si funciona
 
-Mira `reports/seguimiento.xlsx`, hoja **Resumen**. Tres líneas:
+Mira la página de seguimiento, sección **Resumen**. Tres líneas:
 
 | Línea | Qué responde |
 |---|---|
 | `SELECCIÓN DEL DÍA` | ¿Acierta la selección lo que promete (alrededor de 75–80%)? |
 | `MIS APUESTAS REALES` / `Mis apuestas de papel` | ¿Ganas o pierdes con las cuotas de tu casa? Mira el **yield** (beneficio ÷ apostado). |
-| Hoja **Modelo vs mercado** | ¿El modelo local es tan bueno como las cuotas? Menor `log_loss` = mejor. |
+| Sección **Modelo vs mercado** | ¿El modelo local es tan bueno como las cuotas? Menor `log_loss` = mejor. |
 
 Cómo leer los números:
 
@@ -104,7 +109,7 @@ Cómo leer los números:
 - **Cuántas apuestas hacen falta:** con menos de 50, nada. Entre 100 y 200 ya se ve si la selección acierta lo
   que promete. Para saber si es rentable hacen falta varios cientos.
 - **Señal de alarma:** si tras 100 o más apuestas la selección acierta claramente menos que su `probabilidad`
-  media (hoja **Selección**, columnas `pct_acierto` y `prob_media_modelo`), el modelo está fallando.
+  media (sección **Selección**, columnas `pct_acierto` y `prob_media_modelo`), el modelo está fallando.
 
 Qué esperar, sin adornos: la selección debería acertar cerca del 75–80%, pero esos favoritos pagan alrededor de
 1.20–1.35. Con el margen de la casa, lo normal es quedar cerca de cero o algo por debajo. El sistema te dice
@@ -141,7 +146,8 @@ La salida de cada ejecución queda en `logs/programado.log`.
 | Síntoma | Qué hacer |
 |---|---|
 | La selección sale vacía | Normal algunos días (pocos partidos o ninguno claro). No se apuesta. |
-| "No se pudo escribir ... ¿está abierto en Excel?" | Cierra el Excel y ejecuta `.venv/bin/futbol hoy`. |
+| "No application knows how to open ... .xlsx" | No tienes Excel ni Numbers. Usa `.venv/bin/futbol ver` (versión web). |
+| La página muestra datos viejos | Recarga la pestaña (Cmd + R). |
 | "Sin datos nuevos de: ..." | ESPN no respondió para esas ligas; se usó lo guardado. Reintenta más tarde. |
 | "Hay 2 partidos pendientes con ..." al anotar | Escribe más del nombre o añade `--fecha AAAA-MM-DD`. |
 | Una apuesta sigue Pendiente varios días | El partido se aplazó o canceló. |

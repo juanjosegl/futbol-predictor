@@ -90,7 +90,9 @@ def friendly(out: pd.DataFrame) -> pd.DataFrame:
         "acierto_historico": out["acierto_historico"].to_numpy(), "casos_historicos": out["n_historico"].to_numpy(),
         "prob_modelo": pm, "prob_mercado": mk,
         "nota": np.where(np.isfinite(cuota), "", "Sin cuotas en ESPN: solo modelo; mira la cuota de tu casa"),
-    })
+    })[["fecha", "hora", "deporte", "partido", "apostar_a", "probabilidad", "cuota_minima", "cuota_espn",
+        "supera_minima", "acierto_historico", "casos_historicos", "confianza", "liga", "prob_modelo", "prob_mercado",
+        "nota"]]  # lo que hace falta para decidir, primero
 
 
 NOTES = ["Solo apuesta simple al ganador del partido (nada de combinadas). Si la lista está vacía, hoy no se apuesta.",
@@ -221,7 +223,7 @@ def hoy(cfg: dict, days: int | None = None, top: int = 25, record: bool = True, 
                                     "cuota_espn", "acierto_historico", "nota"]].to_string(index=False))
         else:
             log.info("SELECCIÓN DEL DÍA: ningún partido cumple los criterios. Hoy no se apuesta.")
-    log.info("Para verlo: %s (selección y todos los partidos) y %s (aciertos y fallos). "
+    log.info("Para verlo en el navegador: `futbol ver` (abre %s y %s; también hay .xlsx). "
              "Más probable no significa rentable: apuesta solo si tu casa paga al menos la cuota_minima.",
-             rep / "hoy.xlsx", rep / "seguimiento.xlsx")
+             rep / "hoy.html", rep / "seguimiento.html")
     return out

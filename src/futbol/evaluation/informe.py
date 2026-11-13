@@ -266,9 +266,87 @@ MONEY = {"beneficio_u", "beneficio_acumulado_u", "beneficio_pronostico", "benefi
 FILL = {"Acertó": "C6EFCE", "Falló": "FFC7CE", "Pendiente": "FFF2CC", "Ganada": "C6EFCE", "Perdida": "FFC7CE"}
 
 
+CSS = """
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2430;--muted:#5d6b7c;--line:#dfe4ea;--head:#1f4e78;--headink:#fff;
+--ok:#c6efce;--bad:#ffc7ce;--wait:#fff2cc;--accent:#1f4e78}
+@media (prefers-color-scheme:dark){:root{--bg:#12161c;--card:#1a2029;--ink:#e6eaf0;--muted:#9aa7b6;--line:#2b3440;
+--head:#2a5f91;--ok:#1f4d2e;--bad:#5a2329;--wait:#55481a;--accent:#8ab8e6}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
+font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{padding:20px 16px 8px;max-width:1500px;margin:0 auto}h1{font-size:22px;margin:0 0 6px}
+.notes{color:var(--muted);margin:2px 0;font-size:14px}
+nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px;z-index:5;
+display:flex;gap:6px;flex-wrap:wrap;max-width:1500px;margin:0 auto}
+nav a{color:var(--accent);text-decoration:none;padding:4px 10px;border:1px solid var(--line);border-radius:999px;
+font-size:13px;background:var(--card);white-space:nowrap}
+main{max-width:1500px;margin:0 auto;padding:8px 16px 40px}section{margin:22px 0;scroll-margin-top:60px}
+h2{font-size:17px;margin:0 0 8px}.count{color:var(--muted);font-weight:400;font-size:13px}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{background:var(--head);color:var(--headink);text-align:left;padding:7px 10px;font-size:12.5px;white-space:nowrap}
+td{padding:6px 10px;border-top:1px solid var(--line);white-space:nowrap}td.num{text-align:right}
+td.txt{white-space:normal;min-width:220px}.empty{padding:14px;color:var(--muted)}
+.Acertó,.Ganada{background:var(--ok)}.Falló,.Perdida{background:var(--bad)}.Pendiente{background:var(--wait)}
+"""
+
+
+def _fmt(col: str, v) -> tuple[str, str]:
+    """(texto, clase CSS) de una celda para la versión web."""
+    import html
+
+    if v is None or v is pd.NA or (isinstance(v, (float, np.floating)) and not np.isfinite(v)):
+        return "", ""
+    if isinstance(v, (bool, np.bool_)):
+        return ("Sí" if v else "No"), ""
+    if isinstance(v, (int, np.integer)):
+        return f"{int(v):,}".replace(",", "."), ("" if col == "valor" else "num")  # el Resumen se lee alineado a la izquierda
+    if isinstance(v, (float, np.floating)):
+        if col in PCT:
+            return f"{100 * v:.1f}%", "num"
+        if col in MONEY:
+            return f"{v:+,.2f}", "num"
+        return (f"{v:,.0f}" if abs(v) >= 1000 and float(v).is_integer() else f"{v:.2f}"), "num"
+    text = html.escape(str(v))
+    return text, (str(v) if col == "estado" and str(v) in FILL else "txt" if len(text) > 60 else "")
+
+
+def save_html(tables: dict[str, pd.DataFrame], path: Path, title: str = "", notes: list[str] | None = None) -> Path:
+    """Los mismos documentos en una sola página web (se abre en cualquier navegador, sin Excel ni Numbers)."""
+    import html
+
+    nav, body = [], []
+    for k, (name, df) in enumerate(tables.items()):
+        nav.append(f'<a href="#s{k}">{html.escape(name)}</a>')
+        if len(df):
+            head = "".join(f"<th>{html.escape(str(c))}</th>" for c in df.columns)
+            rows = []
+            for row in df.itertuples(index=False):
+                cells = (_fmt(c, v) for c, v in zip(df.columns, row))
+                rows.append("<tr>" + "".join(f'<td class="{cls}">{txt}</td>' if cls else f"<td>{txt}</td>"
+                                             for txt, cls in cells) + "</tr>")
+            table = f'<div class="wrap"><table><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
+        else:
+            table = '<div class="wrap"><div class="empty">Sin datos todavía.</div></div>'
+        count = "" if list(df.columns) == ["indicador", "valor"] else f' <span class="count">({len(df)})</span>'
+        body.append(f'<section id="s{k}"><h2>{html.escape(name)}{count}</h2>{table}</section>')
+    doc = (f'<!doctype html><html lang="es"><head><meta charset="utf-8">'
+           f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title>'
+           f"<style>{CSS}</style></head><body><header><h1>{html.escape(title)}</h1>"
+           + "".join(f'<p class="notes">{html.escape(n)}</p>' for n in notes or [])
+           + f'</header><nav>{"".join(nav)}</nav><main>{"".join(body)}</main></body></html>')
+    path = Path(path)
+    tmp = path.with_suffix(".html.tmp")
+    tmp.write_text(doc, encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
 def save_workbook(tables: dict[str, pd.DataFrame], path: Path, title: str = "", notes: list[str] | None = None) -> Path | None:
-    """Escribe un Excel con una hoja por tabla. La primera hoja lleva el título y las notas encima."""
+    """Escribe un Excel con una hoja por tabla (la primera lleva el título y las notas encima) y, al lado,
+    la misma información como página web (`.html`), que no necesita ninguna aplicación instalada."""
     from openpyxl import Workbook
+
+    save_html(tables, Path(path).with_suffix(".html"), title, notes)
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
@@ -312,7 +390,7 @@ def save_workbook(tables: dict[str, pd.DataFrame], path: Path, title: str = "", 
     try:
         wb.save(path)
     except PermissionError:
-        log.warning("No se pudo escribir %s (¿está abierto en Excel?). Ciérralo y vuelve a ejecutar.", path)
+        log.warning("No se pudo escribir %s (¿está abierto en Excel?). La versión web sí se actualizó.", path)
         return None
     return Path(path)
 
@@ -327,5 +405,5 @@ def write_report(cfg: dict, led: pd.DataFrame | None = None, path: Path | None =
     path = Path(path) if path else get_path(cfg, "reports") / "seguimiento.xlsx"
     out = save_workbook(analyze(led, cfg), path, title)
     if out:
-        log.info("Documento de seguimiento -> %s", path)
+        log.info("Documento de seguimiento -> %s (y %s)", path.with_suffix(".html").name, path.name)
     return out

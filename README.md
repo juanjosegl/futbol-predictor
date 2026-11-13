@@ -77,7 +77,7 @@ Todos aceptan `--config ruta/a/config.yaml`. También se pueden lanzar con `pyth
 | `futbol informe` | Regenera `reports/seguimiento.xlsx` (predicciones, aciertos/fallos y análisis) desde el ledger. |
 | `futbol actualizar` | **Rutina semanal en un solo comando:** descarga → build → train → settle → predict de `data/fixtures/upcoming.csv` (o `--fixtures ARCHIVO.csv`) → documento de seguimiento. `--no-train` para ir más rápido. |
 | `futbol hoy` | **Pronósticos multideporte del día en un solo comando** (ver [Multideporte](#multideporte-futbol-hoy)): actualiza datos, liquida lo pendiente, predice y actualiza el ledger y el Excel. `--dias 3`, `--top 40`, `--liga nba --liga atp`, `--no-ledger`. |
-| `futbol ver` | Abre `reports/hoy.xlsx` (selección del día) y `reports/seguimiento.xlsx` (aciertos, fallos y apuestas). |
+| `futbol ver` | Abre en el navegador `reports/hoy.html` (selección del día) y `reports/seguimiento.html` (aciertos, fallos y apuestas); no necesita Excel. `--excel` abre los `.xlsx`. |
 | `futbol apuesta EQUIPO --cuota 1.35 --monto 10000` | Anota una apuesta simple sobre un partido pendiente (por defecto, al pronóstico). `--papel` = simulada, sin dinero. Se liquida sola. |
 | `futbol programar` | Ejecuta `futbol hoy` solo cada día (macOS, 07:00 y 17:00; `--hora`, `--estado`, `--probar`, `--quitar`). |
 | `futbol deportes-descargar` | Descarga/actualiza el historial de las ligas de `deportes.ligas` (ESPN). `--refresh` para rehacerlo. |

@@ -1,6 +1,76 @@
 {
-  "liquidadas_ahora": 0,
-  "total_liquidadas": 0,
-  "validas_antes_del_partido": 0,
-  "pendientes": 35
+  "liquidadas_ahora": 9,
+  "total_liquidadas": 17,
+  "validas_antes_del_partido": 17,
+  "pendientes": 36,
+  "accuracy_modelo": 0.7647058823529411,
+  "accuracy_mercado": 0.8888888888888888,
+  "accuracy_over_under": NaN,
+  "log_loss_modelo": 0.5731317327522277,
+  "log_loss_mercado_mismas": 0.493788168990294,
+  "log_loss_modelo_mismas": 0.5133999124170351,
+  "pronosticos_1u": {
+    "n": 9,
+    "beneficio_u": 3.0597,
+    "yield": 0.33996666666666664
+  },
+  "value_bets_1x2": {
+    "n": 1,
+    "beneficio_u": -1.0,
+    "yield": -1.0
+  },
+  "value_bets_ou": {
+    "n": 0,
+    "beneficio_u": 0.0,
+    "yield": null
+  },
+  "apuestas_reales": {
+    "n": 0,
+    "beneficio": 0.0,
+    "apostado": 0.0
+  },
+  "por_confianza": [
+    {
+      "confianza": "Alta",
+      "partidos": 1,
+      "aciertos": 1,
+      "pct_acierto": 1.0,
+      "ic95_inf": 0.20654329147389294,
+      "ic95_sup": 1.0,
+      "prob_media_modelo": 0.7182,
+      "pct_acierto_mercado": 1.0,
+      "cuota_media": 1.3279,
+      "apuestas_con_cuota": 1,
+      "beneficio_u": 0.3279000000000001,
+      "yield": 0.3279000000000001
+    },
+    {
+      "confianza": "Media",
+      "partidos": 14,
+      "aciertos": 11,
+      "pct_acierto": 0.7857142857142857,
+      "ic95_inf": 0.5241027622679172,
+      "ic95_sup": 0.9242875166308363,
+      "prob_media_modelo": 0.6271071428571429,
+      "pct_acierto_mercado": 0.8571428571428571,
+      "cuota_media": 1.5324571428571427,
+      "apuestas_con_cuota": 7,
+      "beneficio_u": 2.0515,
+      "yield": 0.29307142857142854
+    },
+    {
+      "confianza": "Baja",
+      "partidos": 2,
+      "aciertos": 1,
+      "pct_acierto": 0.5,
+      "ic95_inf": 0.09452865480086614,
+      "ic95_sup": 0.9054713451991339,
+      "prob_media_modelo": 0.5338499999999999,
+      "pct_acierto_mercado": 1.0,
+      "cuota_media": 1.6803,
+      "apuestas_con_cuota": 1,
+      "beneficio_u": 0.6802999999999999,
+      "yield": 0.6802999999999999
+    }
+  ]
 }

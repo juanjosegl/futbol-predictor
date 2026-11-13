@@ -132,3 +132,5 @@ def test_settle_with_manual_scores_and_report(cfg, tmp_path):
     wb = load_workbook(tmp_path / "reports" / "seguimiento.xlsx")
     assert {"Resumen", "Predicciones", "Por confianza", "Por liga", "Por semana"} <= set(wb.sheetnames)
     assert list(confidence([0.8, 0.6, 0.4], c)) == ["Alta", "Media", "Baja"]
+    web = (tmp_path / "reports" / "seguimiento.html").read_text(encoding="utf-8")  # versión sin Excel
+    assert "Mis apuestas" in web and 'class="Acertó"' in web and 'class="Pendiente"' in web and "Arsenal" in web
